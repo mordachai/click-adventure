@@ -19,6 +19,7 @@ import { getGraphData } from "./node-utils.js";
 import { HudStyleApp } from "./hud-style-app.js";
 import { AdventureIOApp } from "./adventure-io-app.js";
 import { lockAllUsers, restoreLockedUsers } from "./autolock-utils.js";
+import { promptLinkStateMigration } from "./link-migration.js";
 
 /**
  * O(1) lookup set of sceneIds belonging to graph nodes.
@@ -178,6 +179,7 @@ Hooks.on("pauseGame", async (paused) => {
  * node's scene, avoiding a redundant reload when the user is already in the right place.
  */
 Hooks.on("ready", async () => {
+  await promptLinkStateMigration();
   _buildSceneIdCache();
 
   // Clear stale pause snapshot if the world reloaded without a proper unpause.
@@ -214,17 +216,17 @@ Hooks.on("ready", async () => {
 Hooks.on("init", () => {
   Handlebars.registerHelper("eq", (a, b) => a === b);
 
-  // Returns a Unicode glyph for a passage's direction axis (both/forward/backward).
-  Handlebars.registerHelper("caDirectionAxisIcon", dirAxis => {
+  // Returns a Unicode glyph for a passage's direction (both/forward/backward).
+  Handlebars.registerHelper("caDirectionAxisIcon", direction => {
     const icons = { both: "⟷", forward: "→", backward: "←" };
-    return icons[dirAxis] ?? "?";
+    return icons[direction] ?? "?";
   });
 
-  // Returns a Unicode glyph for a passage's state axis (open/blocked/custom).
+  // Returns a Unicode glyph for a passage's state (open/blocked/custom).
   // "secret" has no glyph here — the template renders an actual fa-mask icon for it instead.
-  Handlebars.registerHelper("caStateAxisIcon", stateAxis => {
+  Handlebars.registerHelper("caStateAxisIcon", state => {
     const icons = { open: "O", blocked: "⊘", custom: "C" };
-    return icons[stateAxis] ?? "?";
+    return icons[state] ?? "?";
   });
 
   // Returns a Unicode/emoji icon for a key condition's type, used in the Passage Editor's

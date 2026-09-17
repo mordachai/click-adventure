@@ -15,7 +15,7 @@
 
 import { InstructionsApp } from "./instructions-app.js";
 import { SettingsApp } from "./settings-app.js";
-import { getNodeActiveImage, getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, getLinkStateFromSide } from "./node-utils.js";
+import { getNodeActiveImage, getGraphData, saveGraphData, isMultiPassage, getPassageStateFromSide, nodeHasNoPlayerExit } from "./node-utils.js";
 
 const _VIDEO_EXT = new Set(["webm", "mp4"]);
 /** @param {string} src @returns {boolean} */
@@ -190,9 +190,8 @@ export class ManagerApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (link.type === "peek") continue;
       if (isMultiPassage(link)) {
         for (const passage of link.passages) {
-          const dir = passage.direction ?? "both";
           const side = link.sourceId === gmNodeId ? "source" : (link.targetId === gmNodeId ? "target" : null);
-          if (!side || getLinkStateFromSide(dir, side) !== "open") continue;
+          if (!side || getPassageStateFromSide(passage, side) !== "open") continue;
           const otherId = side === "source" ? link.targetId : link.sourceId;
           const other = nodes.find(n => n.id === otherId);
           if (!other) continue;
@@ -205,9 +204,9 @@ export class ManagerApp extends HandlebarsApplicationMixin(ApplicationV2) {
           options.push(option);
         }
       } else {
-        const dir = getEffectiveDirection(link);
+        const passage0 = link.passages?.[0] ?? {};
         const side = link.sourceId === gmNodeId ? "source" : (link.targetId === gmNodeId ? "target" : null);
-        if (!side || getLinkStateFromSide(dir, side) !== "open") continue;
+        if (!side || getPassageStateFromSide(passage0, side) !== "open") continue;
         const otherId = side === "source" ? link.targetId : link.sourceId;
         if (seen.has(otherId)) continue;
         const other = nodes.find(n => n.id === otherId);
@@ -263,7 +262,8 @@ export class ManagerApp extends HandlebarsApplicationMixin(ApplicationV2) {
         ...n,
         imageSrc,
         isVideo: isVideoSrc(imageSrc),
-        occupants: occupants.get(n.id) ?? []
+        occupants: occupants.get(n.id) ?? [],
+        noExit: nodeHasNoPlayerExit(n.id, links)
       };
     });
     context.links = links;

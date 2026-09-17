@@ -26,24 +26,13 @@ export function getNodeActiveImage(node) {
 /**
  * Returns true when a link carries more than one passage, or when the link was explicitly
  * promoted to multi-passage mode via the editor (forceMulti flag set on save).
- * Multi-passage links open the LinkEditorApp instead of cycling direction on click.
+ * Multi-passage links open the LinkEditorApp instead of cycling a state on click.
  *
  * @param {object} link
  * @returns {boolean}
  */
 export function isMultiPassage(link) {
   return link.forceMulti === true || (link.passages?.length ?? 0) > 1;
-}
-
-/**
- * Returns the effective traversal direction for a single-passage link.
- * Falls back to the legacy flat `direction` field for links not yet migrated.
- *
- * @param {object} link
- * @returns {string} one of the flat direction strings — see decomposeDirection
- */
-export function getEffectiveDirection(link) {
-  return link.passages?.[0]?.direction ?? link.direction ?? "both";
 }
 
 /**
@@ -144,20 +133,24 @@ export async function setNodeActiveLinkedScene(nodeId, linkedSceneId) {
 }
 
 /**
- * A link/passage's traversal mode is stored as one flat string (e.g. "both", "forward",
- * "forward-blocked", "custom"), decomposed into two independent axes for editing:
- *   - direction: "both" | "forward" | "backward" — which side(s) are the "normal" side.
- *   - state:     "open" | "blocked" | "secret" | "custom" — what happens on the side(s)
- *                that aren't plain "forward"/"backward" travel.
+ * A passage's traversal mode is two independent fields:
+ *   - direction: "both" | "forward" | "backward" — which side(s) of the link this passage
+ *                exists on at all. "forward" = source→target only; the target side has no
+ *                route from this passage — not "open", not "blocked", it simply isn't
+ *                offered as an option there. "backward" is the mirror image.
+ *   - state:     "open" | "blocked" | "secret" | "custom" — the condition on the side(s)
+ *                the passage exists on (see reference below).
  *
- * decomposeDirection/composeDirection convert between the flat string and the two axes;
- * cycleLinkDirectionAxis/cycleLinkStateAxis step one axis while holding the other fixed —
- * these are what the GM's two controls (direction click, state click) call. A flat string
- * is "both" + a non-open state (e.g. "blocked") when the state applies to both sides, or
- * "<direction>-<state>" (e.g. "forward-blocked") when it applies only to the closed side
- * of a one-way link.
+ * One passage can't be two different states on its two ends (e.g. secret one way, open the
+ * other) — that needs a second passage on the same link (LinkEditorApp's multi-passage
+ * support), one forward+secret and one backward+open. direction+state alone fully decides
+ * existence, so there is nothing to reconcile between the two passages' unrelated sides.
  *
- * State axis reference:
+ * decomposeDirection/getLinkStateFromSide/splitOneWayState below read the OLD flat combined
+ * string (e.g. "forward-blocked") that predates this — kept for link-migration.js and as a
+ * rendering convenience in manager-graph.js, never touched by gameplay code directly.
+ *
+ * State reference:
  *   "open"   — Normal traversal, no restriction.
  *   "blocked"— Visible to everyone (⊘ icon, red) but not traversable by players. The GM
  *              can still cross it. Useful for hinting at a passage that isn't open yet.
@@ -168,18 +161,10 @@ export async function setNodeActiveLinkedScene(nodeId, linkedSceneId) {
  *              satisfies the passage's `keys` (see evaluatePassageKeys) — an item they must
  *              own, a specific actor, a macro that returns true, or a scene they've
  *              visited. The GM always bypasses the check.
- *
- * Combined with direction, a one-way state (e.g. "forward-blocked") lets a passage be
- * bolted, secret or keyed from one side while remaining perfectly normal from the other —
- * e.g. a door barred from the inside, or a bookshelf that hides a passage on one side but
- * is a plain doorway on the other.
  */
 
-const DIRECTION_AXIS_CYCLE = Object.freeze({ both: "forward", forward: "backward", backward: "both" });
-const STATE_AXIS_CYCLE     = Object.freeze({ open: "blocked", blocked: "secret", secret: "custom", custom: "open" });
-
 /**
- * Splits a flat direction string into its direction axis (both/forward/backward) and
+ * Splits a flat legacy direction string into its direction axis (both/forward/backward) and
  * state axis (open/blocked/secret/custom).
  * @param {string} direction
  * @returns {{dirAxis: "both"|"forward"|"backward", stateAxis: "open"|"blocked"|"secret"|"custom"}}
@@ -197,46 +182,11 @@ export function decomposeDirection(direction) {
 }
 
 /**
- * Recomposes a direction axis and state axis back into the flat stored string.
- * @param {"both"|"forward"|"backward"} dirAxis
- * @param {"open"|"blocked"|"secret"|"custom"} stateAxis
- * @returns {string}
- */
-export function composeDirection(dirAxis, stateAxis) {
-  if (stateAxis === "open") return dirAxis;
-  if (dirAxis === "both") return stateAxis;
-  return `${dirAxis}-${stateAxis}`;
-}
-
-/**
- * Cycles the direction axis (both → forward → backward → both) while preserving the
- * current state axis. Called when the GM clicks the direction control.
- * @param {string} direction
- * @returns {string}
- */
-export function cycleLinkDirectionAxis(direction) {
-  const { dirAxis, stateAxis } = decomposeDirection(direction);
-  return composeDirection(DIRECTION_AXIS_CYCLE[dirAxis], stateAxis);
-}
-
-/**
- * Cycles the state axis (open → blocked → secret → custom → open) while preserving the
- * current direction axis. Called when the GM clicks the state control.
- * @param {string} direction
- * @returns {string}
- */
-export function cycleLinkStateAxis(direction) {
-  const { dirAxis, stateAxis } = decomposeDirection(direction);
-  return composeDirection(dirAxis, STATE_AXIS_CYCLE[stateAxis]);
-}
-
-/**
- * Resolves how a link may be traversed from one specific side, given its effective
- * direction. Single choke point for every direction value — every consumer that gates or
- * labels a destination (the HUD, the "navigate back" check, the Visual Polls integration)
- * goes through this instead of re-deriving the combo logic itself.
+ * Resolves how a legacy flat-direction link may be traversed from one specific side.
+ * Used by link-migration.js to derive direction/state from old data, and by
+ * getPassageStateFromSide as a fallback for any passage that hasn't been migrated yet.
  *
- * @param {string} direction - value from getEffectiveDirection(link)
+ * @param {string} direction - a legacy flat direction string
  * @param {"source"|"target"} side - which side of the link this query is "from"
  * @returns {"open"|"blocked"|"secret"|"custom"|"none"} "none" = no route from this side at
  *   all (the closed side of a plain one-way forward/backward link)
@@ -261,6 +211,76 @@ export function splitOneWayState(direction) {
   const { dirAxis, stateAxis } = decomposeDirection(direction);
   if (dirAxis === "both" || stateAxis === "open") return null;
   return { openSide: dirAxis, closedState: stateAxis };
+}
+
+const DIRECTION_CYCLE = Object.freeze({ both: "forward", forward: "backward", backward: "both" });
+const STATE_CYCLE     = Object.freeze({ open: "blocked", blocked: "secret", secret: "custom", custom: "open" });
+
+/**
+ * Cycles a passage's direction: both → forward → backward → both.
+ * @param {string} currentDirection
+ * @returns {string}
+ */
+export function cyclePassageDirection(currentDirection) {
+  return DIRECTION_CYCLE[currentDirection ?? "both"] ?? "both";
+}
+
+/**
+ * Cycles a passage's state: open → blocked → secret → custom → open.
+ * @param {string} currentState
+ * @returns {string}
+ */
+export function cyclePassageState(currentState) {
+  return STATE_CYCLE[currentState ?? "open"] ?? "open";
+}
+
+/**
+ * Resolves a passage's traversal state from one side — the single source of truth for
+ * gameplay logic (the HUD, the "navigate back" check, the Visual Polls integration).
+ *
+ * A passage exists only on the side(s) named by its `direction`; the other side of a
+ * one-way passage has no route at all ("none") — it is never treated as silently open.
+ *
+ * @param {object} passage
+ * @param {"source"|"target"} side
+ * @returns {"open"|"blocked"|"secret"|"custom"|"none"}
+ */
+export function getPassageStateFromSide(passage, side) {
+  if (passage && passage.state !== undefined) {
+    const dir = passage.direction ?? "both";
+    if (dir === "both") return passage.state;
+    if (dir === "forward") return side === "source" ? passage.state : "none";
+    return side === "target" ? passage.state : "none"; // backward
+  }
+  // Interim per-side shape from a since-reverted design — read directly if still present.
+  if (passage && (passage.sourceState !== undefined || passage.targetState !== undefined)) {
+    const key = side === "source" ? "sourceState" : "targetState";
+    return passage[key] ?? "open";
+  }
+  // Ancient flat combined-string passage, predating any migration.
+  return getLinkStateFromSide(passage?.direction ?? "both", side);
+}
+
+/**
+ * True when no passage anywhere touching this node gives a player a viable way out —
+ * "open" or "custom" (key-gated is still a real route for a player who has the key).
+ * "blocked" and "secret" don't count: players can't cross either. GM-only warning signal
+ * for the Manager canvas (red outline); does not affect HUD behavior or block anything.
+ *
+ * @param {string} nodeId
+ * @param {object[]} links
+ * @returns {boolean}
+ */
+export function nodeHasNoPlayerExit(nodeId, links) {
+  return !links.some(l => {
+    if (l.type === "peek") return false;
+    const side = l.sourceId === nodeId ? "source" : l.targetId === nodeId ? "target" : null;
+    if (!side) return false;
+    return (l.passages ?? []).some(p => {
+      const s = getPassageStateFromSide(p, side);
+      return s === "open" || s === "custom";
+    });
+  });
 }
 
 /**

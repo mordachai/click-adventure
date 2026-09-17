@@ -1,7 +1,8 @@
 /* @section: nodes
    @scope: .ca-node and its child elements (image, label, anchors, buttons, occupants, start icon)
    @depends: --ca-bg-card, --ca-bg-card-empty, --ca-border-card*, --ca-state-open*,
-             --ca-state-anchor, --ca-state-temp, --ca-state-warning, --ca-text-primary,
+             --ca-state-anchor, --ca-state-temp, --ca-state-warning, --ca-state-danger,
+             --ca-state-locked-border, --ca-text-primary,
              --ca-node-size, --ca-node-image-h, --ca-node-btn-size, --ca-anchor-size,
              --ca-radius-*, --ca-z-node, --ca-z-anchor, --ca-z-node-buttons
 
@@ -10,6 +11,7 @@
    @manifest:
      .ca-node                              Scene card, var(--ca-node-size) square, base styles
      .ca-node[data-active="true"]          Active scene (green border + glow)
+     .ca-node[data-no-exit="true"]         No player exit — GM-only warning (red border + glow)
      .ca-node-image                        Top portion of card, holds the scene image
      .ca-node-image::after                 Subtle dark gradient for button legibility
      .ca-node-image--empty                 Placeholder fill when no image is set
@@ -56,6 +58,13 @@
 .click-adventure.manager .ca-node[data-active="true"] {
   border-color: var(--ca-state-open);
   box-shadow: 0 0 0 2px var(--ca-state-open-border), var(--ca-shadow-node);
+}
+
+/* No player-facing exit — every passage out of this node is Blocked or Secret. GM-only
+   visual warning (see nodeHasNoPlayerExit in node-utils.js); doesn't block anything. */
+.click-adventure.manager .ca-node[data-no-exit="true"] {
+  border-color: var(--ca-state-danger);
+  box-shadow: 0 0 0 2px var(--ca-state-locked-border), var(--ca-shadow-node);
 }
 
 /* Image fills the top of the card, flush with rounded corners. */

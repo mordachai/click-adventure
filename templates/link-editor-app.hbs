@@ -15,16 +15,18 @@
                 title="{{#if displayModeIsPathOnly}}Players see: Path Name only{{else}}Players see: Full Name (Path Name){{/if}}">
           {{#if displayModeIsPathOnly}}P{{else}}F{{/if}}
         </button>
-        <button class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-direction" type="button" title="Click to cycle direction: Both ways / Forward / Backward"
-                data-dir-axis="{{dirAxis}}">{{caDirectionAxisIcon dirAxis}}</button>
-        <button class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-state" type="button" title="Click to cycle state: Open / Blocked / Secret / Custom"
-                data-state-axis="{{stateAxis}}">
-          {{#if (eq stateAxis "secret")}}<i class="fa-solid fa-mask"></i>{{else}}{{caStateAxisIcon stateAxis}}{{/if}}
+        <button class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-direction" type="button"
+                title="Click to cycle direction: Both ways / Forward ({{../fromLabel}} → {{../toLabel}}) / Backward ({{../toLabel}} → {{../fromLabel}})"
+                data-direction="{{direction}}">{{caDirectionAxisIcon direction}}</button>
+        <button class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-state" type="button"
+                title="Click to cycle state: Open / Blocked / Secret / Custom"
+                data-state="{{state}}">
+          {{#if (eq state "secret")}}<i class="fa-solid fa-mask"></i>{{else}}{{caStateAxisIcon state}}{{/if}}
         </button>
         <button class="ca-btn ca-btn--ghost-danger ca-btn--sm ca-passage-remove" type="button" title="Remove passage">✕</button>
       </div>
 
-      {{#if (eq stateAxis "custom")}}
+      {{#if hasCustom}}
       <div class="ca-passage-keys">
         <div class="ca-passage-keys-header">
           <span class="ca-label">Keys required</span>

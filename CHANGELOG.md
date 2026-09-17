@@ -1,3 +1,18 @@
+# 0.2.13
+
+## [Changed]
+- **One-way Blocked/Secret/Custom links now show both sides on the line itself.** A passage that's open one way and Blocked/Secret/Custom the other used to render as a flat amber line with only a small glyph hinting at the closed side. It now gradients from green (open side) into the closed side's state color along the line.
+- **Multi-passage links show every passage's state at a glance.** Instead of one flat thick line plus a single "worst state" badge, a multi-passage link now draws one thin dotted line per passage, stacked side-by-side with no gaps — each line colored (or gradiented) exactly like a single-passage link with that passage's own direction and state.
+
+# 0.2.12
+
+## [Fixed]
+- **A one-way passage no longer silently forces its "normal" side to be Open.** The Direction + State combo (Forward/Backward + Open/Blocked/Secret/Custom) always treated the direction-designated side as unconditionally Open no matter what — so a passage that was Secret going one way still showed up as a plain, ungated route coming back, even when a separate ordinary passage already covered the return trip. A one-way passage's non-designated side now correctly has no route at all instead of a phantom Open one. Expressing two different states on the two ends of a connection still takes two passages on the same link (Shift+click → Passage Editor → Add passage) — direction+state alone can't and was never meant to do both at once.
+- **Existing passage data is migrated automatically, once.** On first load after updating, the GM is prompted to optionally export a backup before every link's passage data is rewritten to the fixed format; old data still resolves correctly even if the migration is skipped for now.
+
+## [Added]
+- **The Manager now flags nodes with no way out for players.** If every passage leaving a node is Blocked or Secret, its card gets a red outline and a tooltip explaining why. GM-only visual signal — nothing is blocked or auto-fixed, it's just easy to miss a dead end otherwise.
+
 # 0.2.11
 
 ## [Changed]

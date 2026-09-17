@@ -1,15 +1,20 @@
 /**
  * Editor sheet for the passages array of a link.
  *
- * A link with exactly one passage behaves identically to the legacy direction-cycling link.
- * A link with 2+ passages is "multi-passage" — clicking it in the Manager opens this sheet
- * instead of cycling direction.  Shift+click opens this sheet regardless of passage count.
+ * Each passage has a direction (both/forward/backward — which side(s) it exists on at all)
+ * and a state (open/blocked/secret/custom — the condition on the side(s) it exists on). A
+ * one-way passage's non-designated side has no route at all; expressing a different state on
+ * each side of one link needs two passages, not one — see the module doc comment in
+ * node-utils.js. A link with exactly one passage behaves identically to the legacy
+ * single-passage link. A link with 2+ passages is "multi-passage" — clicking it in the
+ * Manager opens this sheet instead of cycling. Shift+click opens this sheet regardless of
+ * passage count.
  *
  * Opened from ManagerApp._renderLinks via Shift+click or auto-open for multi-passage links.
  * Lifecycle hook: renderLinkEditorApp
  */
 
-import { getEffectiveDirection, getGraphData, saveGraphData, decomposeDirection, cycleLinkDirectionAxis, cycleLinkStateAxis } from "./node-utils.js";
+import { getGraphData, saveGraphData, cyclePassageDirection, cyclePassageState } from "./node-utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -82,7 +87,7 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     /**
      * Mutable working copy of passages — initialised from persisted data on first _prepareContext,
      * then updated in-memory until Save is clicked.  Mirrors NodeConfigApp's pending-state pattern.
-     * @type {Array<{label: string, direction: string}>|null}
+     * @type {Array<{label: string, direction: string, state: string}>|null}
      */
     this._pendingPassages = null;
   }
@@ -92,7 +97,7 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
   /**
    * Provides passage rows and endpoint labels to the editor template.
    * Pending passages are seeded from the persisted link only on the very first call so that
-   * in-progress edits survive re-renders triggered by Add / Remove / direction-cycle.
+   * in-progress edits survive re-renders triggered by Add / Remove / a state cycle.
    * Triggered during the ApplicationV2 _prepareContext lifecycle stage.
    *
    * @override
@@ -111,7 +116,7 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     if (!this._pendingPassages) {
-      const stored = link.passages ?? [{ label: "", direction: getEffectiveDirection(link) }];
+      const stored = link.passages ?? [{ label: "", direction: "both", state: "open" }];
       this._pendingPassages = structuredClone(stored);
     }
 
@@ -119,16 +124,17 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const tgtNode = nodes.find(n => n.id === link.targetId);
     context.fromLabel  = srcNode?.label || link.sourceId;
     context.toLabel    = tgtNode?.label || link.targetId;
-    // Inject numeric index, per-passage display mode flag, and the direction/state axes
-    // (the two independent controls the row renders) for the template
+    // Inject numeric index and per-passage display mode flag for the template
     context.passages = this._pendingPassages.map((p, i) => {
-      const { dirAxis, stateAxis } = decomposeDirection(p.direction ?? "both");
+      const direction = p.direction ?? "both";
+      const state = p.state ?? "open";
       return {
         ...p,
         index: i,
         displayModeIsPathOnly: (p.displayMode ?? "full") === "path-only",
-        dirAxis,
-        stateAxis,
+        direction,
+        state,
+        hasCustom: state === "custom",
         keyMode: p.keyMode ?? "AND",
         keys: (p.keys ?? []).map((k, ki) => ({ ...k, keyIndex: ki }))
       };
@@ -151,7 +157,7 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const html = this.element;
 
     html.querySelector(".ca-passage-add")?.addEventListener("click", () => {
-      this._pendingPassages.push({ label: "", direction: "both" });
+      this._pendingPassages.push({ label: "", direction: "both", state: "open" });
       this.render({ force: true });
     });
 
@@ -161,28 +167,28 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
         this._pendingPassages.splice(i, 1);
         // Always keep at least one passage row
         if (this._pendingPassages.length === 0) {
-          this._pendingPassages.push({ label: "", direction: "both" });
+          this._pendingPassages.push({ label: "", direction: "both", state: "open" });
         }
         this.render({ force: true });
       });
     });
 
-    // Direction axis: both → forward → backward → both (per row, independent)
+    // Direction: both → forward → backward → both (per row, independent)
     html.querySelectorAll(".ca-passage-direction").forEach(btn => {
       btn.addEventListener("click", () => {
         const i = parseInt(btn.closest("[data-index]").dataset.index, 10);
         const current = this._pendingPassages[i].direction ?? "both";
-        this._pendingPassages[i] = { ...this._pendingPassages[i], direction: cycleLinkDirectionAxis(current) };
+        this._pendingPassages[i] = { ...this._pendingPassages[i], direction: cyclePassageDirection(current) };
         this.render({ force: true });
       });
     });
 
-    // State axis: open → blocked → secret → custom → open (per row, independent)
+    // State: open → blocked → secret → custom → open (per row, independent)
     html.querySelectorAll(".ca-passage-state").forEach(btn => {
       btn.addEventListener("click", () => {
         const i = parseInt(btn.closest("[data-index]").dataset.index, 10);
-        const current = this._pendingPassages[i].direction ?? "both";
-        this._pendingPassages[i] = { ...this._pendingPassages[i], direction: cycleLinkStateAxis(current) };
+        const current = this._pendingPassages[i].state ?? "open";
+        this._pendingPassages[i] = { ...this._pendingPassages[i], state: cyclePassageState(current) };
         this.render({ force: true });
       });
     });
@@ -287,7 +293,7 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
    */
   async _onConvertToSingle() {
     const { nodes, links } = getGraphData();
-    const first = this._pendingPassages[0] ?? { label: "", direction: "both" };
+    const first = this._pendingPassages[0] ?? { label: "", direction: "both", state: "open" };
     const updatedLinks = links.map((l, i) =>
       i === this._linkIndex
         ? { ...l, passages: [{ ...first }], forceMulti: false }

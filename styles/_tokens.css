@@ -90,8 +90,7 @@
   --ca-state-locked:      #ef4444;   /* red — link state "blocked": visible, not traversable */
   --ca-state-blocked:     #a855f7;   /* purple — link state "secret": hidden from players */
   --ca-state-custom:      #3b82f6;   /* blue — link state "custom": keyed/conditional */
-  --ca-state-multi:       #a855f7;   /* multi-passage link */
-  --ca-state-multi-hover: #c084fc;
+  --ca-state-multi-hover: #c084fc;   /* multi-passage destination highlight in the HUD */
   --ca-state-directional: #f59e0b;   /* forward/backward / start icon */
   --ca-state-warning:     #f59e0b;
   --ca-state-danger:      #d32f2f;   /* delete buttons */

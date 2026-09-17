@@ -1,7 +1,7 @@
 /* @section: links
    @scope: SVG link layer between nodes — paths, hit areas, direction indicators
    @depends: --ca-state-open, --ca-state-locked, --ca-state-blocked, --ca-state-custom,
-             --ca-state-multi*, --ca-state-directional, --ca-state-link-base,
+             --ca-state-directional, --ca-state-link-base,
              --ca-state-link-hover, --ca-state-temp, --ca-z-link
 
    A link's state axis is one of: open (no glyph of its own), blocked (⊘, red, visible to
@@ -10,6 +10,16 @@
    the direction axis this gives 12 flat direction strings — see node-utils.js decomposeDirection.
    Secret/custom glyphs are literal Font Awesome codepoints (not emoji) so `fill` can tint them —
    see _stateGlyph() in manager-graph.js.
+
+   A one-way combo (open one side, blocked/secret/custom the other) gets a green→state-color
+   gradient stroke instead of a flat color, built per-path in manager-graph.js (_createLinkPath/
+   _makeGradient) since the color ramp needs each path's own endpoint coordinates — the
+   `data-direction` rules below still supply the dasharray and everything else.
+
+   A multi-passage link (2+ passages) draws one thin dotted path per passage, stacked with a
+   tight perpendicular offset into a contiguous bundle (manager-graph.js renderLinks). Each
+   stacked path keeps its own passage's `data-direction` (and gradient, if that passage is a
+   one-way combo) for color — `[data-multi="true"]` below only overrides width/dasharray.
 
    @manifest:
      .ca-links-layer                              SVG layer overlaid on the canvas (pointer-events: none)
@@ -20,9 +30,9 @@
      .ca-link[data-direction="blocked"]           Blocked (both sides) — red, dashed
      .ca-link[data-direction="secret"]            Secret (both sides) — purple, dashed
      .ca-link[data-direction="custom"]            Custom/keyed (both sides) — blue, dashed
-     .ca-link[data-direction="*-blocked"|"*-secret"|"*-custom"] One-way combo — amber, dashed
-     .ca-link[data-multi="true"]                  Multi-passage link — thicker, purple
-     .ca-link[data-multi="true"].ca-link--hover   Multi link hover state
+     .ca-link[data-direction="*-blocked"|"*-secret"|"*-custom"] One-way combo — green→state-color gradient, dashed
+     .ca-link[data-multi="true"]                  One stacked passage line in a multi-passage bundle — thin, dotted; color from data-direction/gradient
+     .ca-link[data-multi="true"].ca-link--hover   Multi-passage bundle hover state
      .ca-link-hit                                 Invisible wider hit-target for click handling
      .ca-temp-link                                Dashed amber preview while user drags from anchor
      .ca-link-direction                           Text indicator at path midpoint (eg. "↔" or "⊘")
@@ -142,20 +152,16 @@
   font-size: 10px;
 }
 
-/* Multi-passage link visual. */
+/* Multi-passage link visual — one of these per passage, stacked into a bundle (see
+   manager-graph.js). Color comes from the shared data-direction rules above (or an inline
+   gradient for a one-way combo passage); this only sets the thin dotted "bundle" look. */
 .click-adventure.manager .ca-link[data-multi="true"] {
-  stroke-width: 4px;
-  stroke: var(--ca-state-multi);
+  stroke-width: 3px;
+  stroke-dasharray: 0.5 3.5;
 }
 
 .click-adventure.manager .ca-link[data-multi="true"].ca-link--hover {
-  stroke: var(--ca-state-multi-hover);
-  stroke-width: 5px;
-}
-
-.click-adventure.manager .ca-link-direction[data-direction="multi"] {
-  fill: var(--ca-state-multi);
-  font-size: 14px;
+  stroke-width: 4px;
 }
 
 /* Peek link — teal dashed line, visually distinct from navigation links. */

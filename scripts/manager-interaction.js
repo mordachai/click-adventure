@@ -416,7 +416,7 @@ export async function saveLink(app, sourceId, sourceAnchor, targetId, targetAnch
   const isPeek = linkType === "peek";
   const newLink = isPeek
     ? { sourceId, sourceAnchor, targetId, targetAnchor, type: "peek" }
-    : { sourceId, sourceAnchor, targetId, targetAnchor, passages: [{ label: "", direction: "both" }] };
+    : { sourceId, sourceAnchor, targetId, targetAnchor, passages: [{ label: "", direction: "both", state: "open" }] };
 
   const newLinks = [...links, newLink];
   await saveGraphData({ sceneId, startNodeId, nodes, links: newLinks });

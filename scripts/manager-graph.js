@@ -7,7 +7,23 @@
  */
 
 import { LinkEditorApp } from "./link-editor-app.js";
-import { getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, decomposeDirection, cycleLinkDirectionAxis, cycleLinkStateAxis, splitOneWayState } from "./node-utils.js";
+import { getGraphData, saveGraphData, isMultiPassage, cyclePassageDirection, cyclePassageState, decomposeDirection, splitOneWayState } from "./node-utils.js";
+
+/**
+ * Composes a passage's direction+state into the old flat direction string, purely so the
+ * existing rendering branches below (and their matching CSS in links.css, keyed on those
+ * flat strings) can be reused unchanged. Rendering convenience only — passage.direction/
+ * passage.state (see getPassageStateFromSide in node-utils.js) are the actual source of
+ * truth for gameplay.
+ *
+ * @param {string} direction
+ * @param {string} state
+ * @returns {string} a flat direction string consumable by decomposeDirection/splitOneWayState
+ */
+function _composeDirectionForRender(direction, state) {
+  if (direction === "both") return state === "open" ? "both" : state;
+  return state === "open" ? direction : `${direction}-${state}`;
+}
 
 /**
  * Glyph for a link's state axis, used by both the both-sided indicator and the one-way
@@ -26,6 +42,87 @@ function _stateGlyph(state) {
     case "custom":  return ""; // fa-key (solid) — matches the HUD custom icon
     default:        return "?";
   }
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * CSS custom property backing a state's color, matching the fills used elsewhere in
+ * links.css (state names vs. var names don't match 1:1 — see the file header there).
+ * @param {"open"|"blocked"|"secret"|"custom"} state
+ * @returns {string}
+ */
+function _stateColorVar(state) {
+  switch (state) {
+    case "blocked": return "--ca-state-locked";
+    case "secret":  return "--ca-state-blocked";
+    case "custom":  return "--ca-state-custom";
+    default:        return "--ca-state-open";
+  }
+}
+
+/**
+ * Appends a userSpace linearGradient running from the open endpoint of a one-way combo
+ * (green) to its closed endpoint (the closed side's state color), so the path itself shows
+ * both halves of the combo instead of a single flat color.
+ * @param {SVGDefsElement} defs
+ * @param {string} id
+ * @param {{x:number,y:number}} openPoint
+ * @param {{x:number,y:number}} closedPoint
+ * @param {"blocked"|"secret"|"custom"} closedState
+ */
+function _makeGradient(defs, id, openPoint, closedPoint, closedState) {
+  const grad = document.createElementNS(SVG_NS, "linearGradient");
+  grad.setAttribute("id", id);
+  grad.setAttribute("gradientUnits", "userSpaceOnUse");
+  grad.setAttribute("x1", openPoint.x);
+  grad.setAttribute("y1", openPoint.y);
+  grad.setAttribute("x2", closedPoint.x);
+  grad.setAttribute("y2", closedPoint.y);
+  const stop1 = document.createElementNS(SVG_NS, "stop");
+  stop1.setAttribute("offset", "0%");
+  stop1.setAttribute("style", `stop-color: var(${_stateColorVar("open")})`);
+  const stop2 = document.createElementNS(SVG_NS, "stop");
+  stop2.setAttribute("offset", "100%");
+  stop2.setAttribute("style", `stop-color: var(${_stateColorVar(closedState)})`);
+  grad.appendChild(stop1);
+  grad.appendChild(stop2);
+  defs.appendChild(grad);
+}
+
+/**
+ * Builds one visible link `<path>` for a single passage's composed direction string.
+ * A plain open or flat same-state-both-sides direction gets its color from the matching
+ * `data-direction` rule in links.css, same as before. A one-way combo (open one side,
+ * blocked/secret/custom the other) instead gets a green→state-color gradient stroke via
+ * `_makeGradient`, oriented so the gradient's green end sits on the combo's open side
+ * regardless of whether that's the source or target endpoint.
+ * @param {SVGDefsElement} defs
+ * @param {string} gradKeyId — unique id fragment for this path's gradient, if it needs one
+ * @param {{x:number,y:number}} p1
+ * @param {{dx:number,dy:number}} c1
+ * @param {{x:number,y:number}} p2
+ * @param {{dx:number,dy:number}} c2
+ * @param {string} direction — flat direction string from _composeDirectionForRender
+ * @returns {SVGPathElement}
+ */
+function _createLinkPath(defs, gradKeyId, p1, c1, p2, c2, direction) {
+  const d = `M ${p1.x},${p1.y} C ${p1.x + c1.dx},${p1.y + c1.dy} ${p2.x + c2.dx},${p2.y + c2.dy} ${p2.x},${p2.y}`;
+  const path = document.createElementNS(SVG_NS, "path");
+  path.classList.add("ca-link");
+  path.setAttribute("d", d);
+  path.dataset.direction = direction;
+  path.style.pointerEvents = "none";
+
+  const oneWay = splitOneWayState(direction);
+  if (oneWay) {
+    const openPoint = oneWay.openSide === "forward" ? p1 : p2;
+    const closedPoint = oneWay.openSide === "forward" ? p2 : p1;
+    const gradId = `ca-link-grad-${gradKeyId}`;
+    _makeGradient(defs, gradId, openPoint, closedPoint, oneWay.closedState);
+    path.style.stroke = `url(#${gradId})`;
+  }
+  return path;
 }
 
 /**
@@ -156,8 +253,22 @@ export function renderLinks(app) {
   // Remove only permanent links and direction indicators; leave the transient .ca-temp-link intact
   svg.querySelectorAll(".ca-link, .ca-link-hit, .ca-link-direction, .ca-link-direction-arrow").forEach(el => el.remove());
 
+  // Gradient defs for one-way combo strokes (see _createLinkPath) — reused across renders,
+  // cleared each time so stale gradients from removed/changed links don't pile up.
+  let defs = svg.querySelector("defs.ca-link-defs");
+  if (!defs) {
+    defs = document.createElementNS(SVG_NS, "defs");
+    defs.classList.add("ca-link-defs");
+    svg.appendChild(defs);
+  } else {
+    defs.replaceChildren();
+  }
+
   const wsRect = workspace.getBoundingClientRect();
   const zoom = app._zoom ?? 1;
+  // Spacing between a multi-passage link's stacked per-passage lines — equal to their
+  // stroke-width (links.css) so adjacent lines touch with no visible gap.
+  const MULTI_LINE_GAP = 3;
 
   for (let i = 0; i < links.length; i++) {
     const link = links[i];
@@ -174,20 +285,52 @@ export function renderLinks(app) {
     // Cubic Bézier: M start C cp1 cp2 end
     const d = `M ${p1.x},${p1.y} C ${p1.x + c1.dx},${p1.y + c1.dy} ${p2.x + c2.dx},${p2.y + c2.dy} ${p2.x},${p2.y}`;
 
-    // Visible path — pointer events disabled so the hit area path on top handles interactions
     const isPeek = link.type === "peek";
-    const direction = isPeek ? "peek" : getEffectiveDirection(link);
     const multi = !isPeek && isMultiPassage(link);
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.classList.add("ca-link");
-    if (isPeek) path.classList.add("ca-link--peek");
-    path.setAttribute("d", d);
-    path.dataset.direction = direction;
-    if (multi) path.dataset.multi = "true";
-    path.style.pointerEvents = "none";
-    svg.appendChild(path);
+    const passage0 = link.passages?.[0] ?? {};
+    const direction = isPeek ? "peek" : multi ? null : _composeDirectionForRender(
+      passage0.direction ?? "both",
+      passage0.state ?? "open"
+    );
 
-    // Invisible wide hit-area path — easy right-click target, toggles hover state on the visible path
+    // Visible path(s) — pointer events disabled so the hit area path on top handles interactions.
+    // Single-passage links draw one path (gradiented green→state-color when it's a one-way
+    // combo, via _createLinkPath). Multi-passage links draw one thin dotted path per passage,
+    // translated by a tight perpendicular offset so they stack into a contiguous bundle — a
+    // uniform translation of both endpoints keeps each stacked curve exactly parallel to the
+    // others since the control-point deltas (c1/c2) stay the same.
+    const linkPaths = [];
+    if (isPeek) {
+      const path = document.createElementNS(SVG_NS, "path");
+      path.classList.add("ca-link", "ca-link--peek");
+      path.setAttribute("d", d);
+      path.dataset.direction = "peek";
+      path.style.pointerEvents = "none";
+      svg.appendChild(path);
+      linkPaths.push(path);
+    } else if (multi) {
+      const passages = link.passages;
+      const n = passages.length;
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len; // unit vector perpendicular to the p1→p2 chord
+      passages.forEach((passage, k) => {
+        const off = (k - (n - 1) / 2) * MULTI_LINE_GAP;
+        const sp1 = { x: p1.x + nx * off, y: p1.y + ny * off };
+        const sp2 = { x: p2.x + nx * off, y: p2.y + ny * off };
+        const pDirection = _composeDirectionForRender(passage.direction ?? "both", passage.state ?? "open");
+        const path = _createLinkPath(defs, `${i}-${k}`, sp1, c1, sp2, c2, pDirection);
+        path.dataset.multi = "true";
+        svg.appendChild(path);
+        linkPaths.push(path);
+      });
+    } else {
+      const path = _createLinkPath(defs, String(i), p1, c1, p2, c2, direction);
+      svg.appendChild(path);
+      linkPaths.push(path);
+    }
+
+    // Invisible wide hit-area path — easy right-click target, toggles hover state on the visible path(s)
     const hitPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
     hitPath.classList.add("ca-link-hit");
     hitPath.setAttribute("d", d);
@@ -200,7 +343,7 @@ export function renderLinks(app) {
       if (isPeek) return;
       // Shift+click or multi-passage link → open editor.
       // Plain click on single-passage → cycle direction (both/forward/backward).
-      // Ctrl/Cmd+click on single-passage → cycle state (open/blocked/locked).
+      // Ctrl/Cmd+click on single-passage → cycle state (open/blocked/secret/custom).
       if (e.shiftKey || multi) {
         new LinkEditorApp(i).render(true);
       } else if (e.ctrlKey || e.metaKey) {
@@ -214,8 +357,8 @@ export function renderLinks(app) {
       e.stopPropagation();
       onDeleteLink(app, e, hitPath);
     });
-    hitPath.addEventListener("mouseenter", () => path.classList.add("ca-link--hover"));
-    hitPath.addEventListener("mouseleave", () => path.classList.remove("ca-link--hover"));
+    hitPath.addEventListener("mouseenter", () => linkPaths.forEach(p => p.classList.add("ca-link--hover")));
+    hitPath.addEventListener("mouseleave", () => linkPaths.forEach(p => p.classList.remove("ca-link--hover")));
     svg.appendChild(hitPath);
 
     // Midpoint indicator
@@ -234,38 +377,8 @@ export function renderLinks(app) {
       indicator.textContent = "👁";
       svg.appendChild(indicator);
     } else if (multi) {
-      const indicator = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      indicator.classList.add("ca-link-direction");
-      indicator.setAttribute("x", mid.x);
-      indicator.setAttribute("y", mid.y);
-      indicator.setAttribute("text-anchor", "middle");
-      indicator.setAttribute("dominant-baseline", "central");
-      indicator.dataset.direction = "multi";
-      indicator.style.pointerEvents = "none";
-      indicator.textContent = "⊕";
-      svg.appendChild(indicator);
-
-      // A multi-passage link's own passages can each carry a different state, which the
-      // single "⊕" glyph above can't show. Flag it here with a small secondary badge —
-      // the most restrictive state found across any passage — so the GM sees at a glance
-      // that opening the Passage Editor is worth doing, without cluttering the main glyph.
-      const passageStates = link.passages
-        .map(p => decomposeDirection(p.direction ?? "both").stateAxis)
-        .filter(s => s !== "open");
-      const worstState = ["custom", "secret", "blocked"].find(s => passageStates.includes(s));
-      if (worstState) {
-        const badgePoint = pathMidpoint(p1, c1, p2, c2, 0.7);
-        const badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        badge.classList.add("ca-link-direction", "ca-link-direction--secondary");
-        badge.setAttribute("x", badgePoint.x);
-        badge.setAttribute("y", badgePoint.y);
-        badge.setAttribute("text-anchor", "middle");
-        badge.setAttribute("dominant-baseline", "central");
-        badge.dataset.direction = worstState;
-        badge.style.pointerEvents = "none";
-        badge.textContent = _stateGlyph(worstState);
-        svg.appendChild(badge);
-      }
+      // No midpoint glyph needed — the stacked dotted lines themselves already read as
+      // "multi-passage bundle," each colored/gradiented by its own passage's state.
     } else if (decomposeDirection(direction).dirAxis === "both") {
       const { stateAxis } = decomposeDirection(direction);
       const indicator = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -319,34 +432,35 @@ export function renderLinks(app) {
 // ---------------------------------------------------------------------------
 
 /**
- * Applies a direction-mutating function to a single-passage link and persists the result.
- * Shared by onCycleLink and onCycleLinkState — both are a "read current direction, compute
- * the next one, write it back" operation that only differs in which axis it cycles.
+ * Cycles one field (direction or state) on a single-passage link and persists the result.
+ * Shared by onCycleLink (direction) and onCycleLinkState (state).
  * @param {ManagerApp} app
  * @param {number} linkIndex
- * @param {(currentDir: string) => string} nextDirection
- * @returns {Promise<string|null>} the link's new direction, or null if it was a no-op
- *   (peek link, or multi-passage — cycled via LinkEditorApp instead)
+ * @param {"direction"|"state"} field
+ * @param {(current: string) => string} cycleFn
+ * @returns {Promise<string|null>} the field's new value, or null if it was a no-op
+ *   (peek link, or multi-passage — edited via LinkEditorApp instead)
  */
-async function _mutateLinkDirection(app, linkIndex, nextDirection) {
+async function _mutatePassageField(app, linkIndex, field, cycleFn) {
   const { sceneId, startNodeId, nodes, links } = getGraphData();
   let result = null;
+  const fallback = field === "direction" ? "both" : "open";
   const updatedLinks = links.map((l, i) => {
     if (i !== linkIndex) return l;
-    // Peek links have no direction — cycling is a no-op
     if (l.type === "peek") return l;
     // Multi-passage links are edited via LinkEditorApp — cycling is a no-op here
     if (isMultiPassage(l)) return l;
-    const currentDir = l.passages?.[0]?.direction ?? l.direction ?? "both";
-    const newDir = nextDirection(currentDir);
-    result = newDir;
-    const updatedPassages = l.passages
-      ? [{ ...l.passages[0], direction: newDir }]
-      : [{ label: "", direction: newDir }];
-    return { ...l, passages: updatedPassages };
+    const passage0 = l.passages?.[0] ?? { label: "", direction: "both", state: "open" };
+    const next = cycleFn(passage0[field] ?? fallback);
+    result = next;
+    return { ...l, passages: [{ ...passage0, [field]: next }] };
   });
   await saveGraphData({ sceneId, startNodeId, nodes, links: updatedLinks });
-  renderLinks(app);
+  // Full re-render, not just renderLinks: cycling direction/state can add or remove a
+  // node's last player-viable exit, and the "no way out" red outline (nodeHasNoPlayerExit,
+  // computed in _prepareContext) needs to reflect that immediately, not just on the next
+  // unrelated render.
+  app.render({ force: true });
 
   // Notify HUD immediately so destination list reflects the new link state
   const hud = globalThis.ClickAdventure._hud;
@@ -356,30 +470,28 @@ async function _mutateLinkDirection(app, linkIndex, nextDirection) {
 }
 
 /**
- * Cycles a link's direction axis: both → forward → backward → both. The state axis
- * (open/blocked/locked) is preserved. Triggered by a plain click on a .ca-link-hit element.
+ * Cycles the passage's direction: both → forward → backward → both.
+ * Triggered by a plain click on a .ca-link-hit element.
  * @param {ManagerApp} app
  * @param {number} linkIndex
  * @returns {Promise<void>}
  */
 export async function onCycleLink(app, linkIndex) {
-  await _mutateLinkDirection(app, linkIndex, cycleLinkDirectionAxis);
+  await _mutatePassageField(app, linkIndex, "direction", cyclePassageDirection);
 }
 
 /**
- * Cycles a link's state axis: open → blocked → secret → custom → open. The direction axis
- * (both/forward/backward) is preserved. Triggered by a Ctrl/Cmd+click on a .ca-link-hit
- * element. Landing on "custom" opens the Passage Editor immediately, since that's the only
- * place a passage's keys can be configured — canvas clicking alone can't drag a key onto it.
+ * Cycles the passage's state: open → blocked → secret → custom → open.
+ * Triggered by a Ctrl/Cmd+click on a .ca-link-hit element. Landing on "custom" opens the
+ * Passage Editor immediately, since that's the only place a passage's keys can be
+ * configured — canvas clicking alone can't drag a key onto it.
  * @param {ManagerApp} app
  * @param {number} linkIndex
  * @returns {Promise<void>}
  */
 export async function onCycleLinkState(app, linkIndex) {
-  const newDirection = await _mutateLinkDirection(app, linkIndex, cycleLinkStateAxis);
-  if (newDirection && decomposeDirection(newDirection).stateAxis === "custom") {
-    new LinkEditorApp(linkIndex).render(true);
-  }
+  const newState = await _mutatePassageField(app, linkIndex, "state", cyclePassageState);
+  if (newState === "custom") new LinkEditorApp(linkIndex).render(true);
 }
 
 /**

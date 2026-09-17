@@ -159,7 +159,8 @@
     {{#each nodes}}
     <div class="ca-node" data-node-id="{{id}}" style="left: {{x}}px; top: {{y}}px;"
          {{#if (eq id ../startNodeId)}}data-start="true"{{/if}}
-         {{#if (eq id ../activeNodeId)}}data-active="true"{{/if}}>
+         {{#if (eq id ../activeNodeId)}}data-active="true"{{/if}}
+         {{#if noExit}}data-no-exit="true" title="No way out for players — every passage from here is Blocked or Secret"{{/if}}>
 
       {{!-- Image — flush no topo, border-radius superior via CSS --}}
       {{#if imageSrc}}

@@ -9,7 +9,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { isMultiPassage, getEffectiveDirection, getLinkStateFromSide, getGraphData, fireActiveItemMacro, fireNodeMacros, setNodeActiveImageIndex, setNodeActiveLinkedScene, getNodeActiveSceneId, setUserCurrentNode, evaluatePassageKeys } from "./node-utils.js";
+import { isMultiPassage, getPassageStateFromSide, getGraphData, fireActiveItemMacro, fireNodeMacros, setNodeActiveImageIndex, setNodeActiveLinkedScene, getNodeActiveSceneId, setUserCurrentNode, evaluatePassageKeys } from "./node-utils.js";
 import { shouldLockOnArrival, isUserLocked } from "./autolock-utils.js";
 import { openNodeJournal } from "./node-media.js";
 
@@ -124,19 +124,18 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (link.type === "peek") continue;
       if (isMultiPassage(link)) {
         for (const passage of link.passages) {
-          const passDir = passage.direction ?? "both";
           if (link.sourceId === node.id && link.targetId === targetNodeId) {
-            if (getLinkStateFromSide(passDir, "source") === "open") return true;
+            if (getPassageStateFromSide(passage, "source") === "open") return true;
           } else if (link.targetId === node.id && link.sourceId === targetNodeId) {
-            if (getLinkStateFromSide(passDir, "target") === "open") return true;
+            if (getPassageStateFromSide(passage, "target") === "open") return true;
           }
         }
       } else {
-        const dir = getEffectiveDirection(link);
+        const passage0 = link.passages?.[0] ?? { direction: link.direction ?? "both" };
         if (link.sourceId === node.id && link.targetId === targetNodeId) {
-          if (getLinkStateFromSide(dir, "source") === "open") return true;
+          if (getPassageStateFromSide(passage0, "source") === "open") return true;
         } else if (link.targetId === node.id && link.sourceId === targetNodeId) {
-          if (getLinkStateFromSide(dir, "target") === "open") return true;
+          if (getPassageStateFromSide(passage0, "target") === "open") return true;
         }
         // "blocked"/"secret"/"custom" (including the closed side of a one-way combo): the
         // link is hidden, visible-but-not-navigable, or conditional from this side — NOT a
@@ -178,7 +177,7 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           // (open/custom) passage on this link already lists — a locked door standing right
           // next to one that works isn't useful information, just a disabled duplicate row.
           // Players don't get shown it in that case; the GM still sees every passage.
-          const passageStates = link.passages.map(p => getLinkStateFromSide(p.direction ?? "both", side));
+          const passageStates = link.passages.map(p => getPassageStateFromSide(p, side));
           const hasWorkingAlternative = passageStates.some(s => s === "open" || s === "custom");
 
           for (let pIdx = 0; pIdx < link.passages.length; pIdx++) {
@@ -210,10 +209,10 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           }
         } else {
           // Single-passage: existing direction logic; dedup so the same node appears only once
-          const dir = getEffectiveDirection(link);
+          const passage0 = link.passages?.[0] ?? { direction: link.direction ?? "both" };
           const side = link.sourceId === node.id ? "source" : (link.targetId === node.id ? "target" : null);
           if (!side) continue;
-          const state = getLinkStateFromSide(dir, side);
+          const state = getPassageStateFromSide(passage0, side);
           // Non-GMs never see the secret side of a link; GMs see it marked as secret.
           // "none" = closed side of a plain one-way link.
           if (state === "none") continue;
@@ -224,7 +223,6 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           if (other && !seen.has(other.id)) {
             seen.add(other.id);
             const navName = other.label || game.scenes.get(other.sceneId)?.name || other.id;
-            const passage0 = link.passages?.[0];
             availableDestinations.push({
               id:     other.id,
               label:  navName,
