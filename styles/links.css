@@ -5,9 +5,11 @@
              --ca-state-link-hover, --ca-state-temp, --ca-z-link
 
    A link's state axis is one of: open (no glyph of its own), blocked (⊘, red, visible to
-   players but not traversable), secret (🎭, purple, hidden from players — GM-only), or
-   custom (🔑, blue, visible to everyone but gated by key conditions). Combined with the
-   direction axis this gives 12 flat direction strings — see node-utils.js decomposeDirection.
+   players but not traversable), secret (mask icon, purple, hidden from players — GM-only), or
+   custom (key icon, blue, visible to everyone but gated by key conditions). Combined with
+   the direction axis this gives 12 flat direction strings — see node-utils.js decomposeDirection.
+   Secret/custom glyphs are literal Font Awesome codepoints (not emoji) so `fill` can tint them —
+   see _stateGlyph() in manager-graph.js.
 
    @manifest:
      .ca-links-layer                              SVG layer overlaid on the canvas (pointer-events: none)
@@ -65,7 +67,7 @@
   stroke-linecap: round;
 }
 
-/* Text indicators (↔ and ✕) shown at the path midpoint. */
+/* Text indicators (⟷, ⊕, ⊘, mask, key) shown at the path midpoint. */
 .click-adventure.manager .ca-link-direction {
   font-size: 13px;
   font-family: sans-serif;
@@ -76,6 +78,16 @@
 .click-adventure.manager .ca-link-direction[data-direction="blocked"] { fill: var(--ca-state-locked); }
 .click-adventure.manager .ca-link-direction[data-direction="secret"]  { fill: var(--ca-state-blocked); }
 .click-adventure.manager .ca-link-direction[data-direction="custom"]  { fill: var(--ca-state-custom); }
+
+/* Secret/custom indicators render a real Font Awesome glyph codepoint (mask/key) instead of an
+   emoji character — emoji ignore `fill` and always show their own fixed color, which was
+   silently defeating the purple/blue tinting above. Covers both the primary both-sided
+   indicator and the secondary closed-side glyph on a one-way combo (both share this class). */
+.click-adventure.manager .ca-link-direction[data-direction="secret"],
+.click-adventure.manager .ca-link-direction[data-direction="custom"] {
+  font-family: var(--font-awesome);
+  font-weight: 900;
+}
 
 /* Directional arrow polygon. */
 .click-adventure.manager .ca-link-direction-arrow {

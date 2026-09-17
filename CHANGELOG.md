@@ -1,3 +1,8 @@
+# 0.2.9
+
+## [Fixed]
+- **Secret and Custom link glyphs on the node editor canvas now actually show purple/blue.** They were rendered as emoji (🎭/🔑), and color emoji ignore SVG `fill` entirely — so both always showed their fixed default color no matter what state color was set. Swapped them for real Font Awesome mask/key glyphs (same icons as the HUD and Passage Editor), which do take the tint.
+
 # 0.2.8
 
 ## [Changed]

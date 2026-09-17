@@ -10,16 +10,20 @@ import { LinkEditorApp } from "./link-editor-app.js";
 import { getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, decomposeDirection, cycleLinkDirectionAxis, cycleLinkStateAxis, splitOneWayState } from "./node-utils.js";
 
 /**
- * Unicode glyph for a link's state axis, used by both the both-sided indicator and the
- * one-way combo's secondary closed-side indicator on the Manager canvas.
+ * Glyph for a link's state axis, used by both the both-sided indicator and the one-way
+ * combo's secondary closed-side indicator on the Manager canvas. "blocked" is a plain
+ * Unicode character (⊘) so it can be tinted via SVG `fill`. "secret" and "custom" use
+ * literal Font Awesome glyph codepoints instead of emoji (🎭/🔑) — color emoji ignore
+ * `fill` entirely and always render in their fixed palette, which silently broke the
+ * purple/blue tinting for those two states; see the matching font-family rule in links.css.
  * @param {"blocked"|"secret"|"custom"} state
  * @returns {string}
  */
 function _stateGlyph(state) {
   switch (state) {
     case "blocked": return "⊘";
-    case "secret":  return "🎭";
-    case "custom":  return "🔑";
+    case "secret":  return ""; // fa-mask (solid) — matches the HUD/Passage Editor secret icon
+    case "custom":  return ""; // fa-key (solid) — matches the HUD custom icon
     default:        return "?";
   }
 }
