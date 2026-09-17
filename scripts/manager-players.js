@@ -6,7 +6,7 @@
  * access `app.element`, `app._navRequests`, and trigger renders.
  */
 
-import { getGraphData, setUserCurrentNode } from "./node-utils.js";
+import { getGraphData, setUserCurrentNode, clearVisitedScenes } from "./node-utils.js";
 import { isUserLocked, lockUser, unlockUser, shouldLockOnArrival } from "./autolock-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -563,6 +563,37 @@ export async function unlockAllPlayers(app) {
     globalThis.ClickAdventure._socket.notifyLockChanged(user.id);
   }
   patchOccupantAvatars(app);
+}
+
+/**
+ * Clears every non-GM user's visited-scene history so "scene visited" key conditions
+ * (see evaluatePassageKeys) re-lock — lets the GM restart a playthrough fresh.
+ * Shows a confirmation dialog first, mirroring onResetMacros.
+ * @returns {Promise<void>}
+ */
+export async function onResetVisitedScenes() {
+  const players = game.users.filter(u => !u.isGM);
+  const count = players.filter(u => (u.getFlag("click-adventure", "visitedSceneIds") ?? []).length > 0).length;
+
+  if (count === 0) {
+    ui.notifications.info("Click Adventure: No visited-scene history to reset.");
+    return;
+  }
+
+  const confirmed = await foundry.applications.api.DialogV2.confirm({
+    window: { title: "Reset Visited Scenes" },
+    classes: ["click-adventure", "ca-dialog"],
+    content: `<p>This will clear the visited-scene history for <strong>${count} player(s)</strong>, re-locking any "scene visited" key conditions.</p><p>Are you sure?</p>`,
+    yes: { class: "ca-btn ca-btn--danger" },
+    no:  { class: "ca-btn ca-btn--quiet" },
+    rejectClose: false
+  });
+  if (!confirmed) return;
+
+  for (const user of players) {
+    await clearVisitedScenes(user);
+  }
+  ui.notifications.info(`Click Adventure: Visited-scene history cleared for ${count} player(s).`);
 }
 
 /**

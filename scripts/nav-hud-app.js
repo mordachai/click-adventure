@@ -79,6 +79,15 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
     /** @type {boolean} — tracks open state of the peek panel across re-renders */
     this._peekPanelOpen = false;
     /**
+     * True while a switch-image / switch-linked-scene click is still awaiting its
+     * setNodeActiveImageIndex/setNodeActiveLinkedScene → scene.view() → socket chain.
+     * Guards against a second rapid click firing an overlapping scene.view() + socket
+     * broadcast before the first has settled — on the receiving client this can race
+     * and leave the canvas on a stale scene even though the sender's own view looks correct.
+     * @type {boolean}
+     */
+    this._sceneSwitchBusy = false;
+    /**
      * Id of the node currently being peeked at, or null.
      * Not persisted — reset on navigation or scene change.
      * @type {string|null}
@@ -187,6 +196,12 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
             // "none" = closed side of a plain one-way passage.
             if (state === "none") continue;
             if (state === "secret" && !game.user.isGM) continue;
+            // A custom passage can also be marked "hidden until unlocked" (lockedVisibility
+            // === "secret"): stays out of the list for players until its keys are satisfied,
+            // instead of always showing with the key icon. GMs still see it every time.
+            if (state === "custom" && !game.user.isGM && passage.lockedVisibility === "secret") {
+              if (!(await evaluatePassageKeys(passage))) continue;
+            }
             if (state === "blocked" && hasWorkingAlternative && !game.user.isGM) continue;
 
             const otherId = side === "source" ? link.targetId : link.sourceId;
@@ -217,6 +232,9 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           // "none" = closed side of a plain one-way link.
           if (state === "none") continue;
           if (state === "secret" && !game.user.isGM) continue;
+          if (state === "custom" && !game.user.isGM && passage0.lockedVisibility === "secret") {
+            if (!(await evaluatePassageKeys(passage0))) continue;
+          }
 
           const otherId = side === "source" ? link.targetId : link.sourceId;
           const other = nodes.find(n => n.id === otherId);
@@ -578,55 +596,78 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
     html.querySelectorAll("[data-action='switch-image']").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        const idx  = parseInt(btn.dataset.index, 10);
-        const node = this._currentNode();
-        if (!node) return;
-        await setNodeActiveImageIndex(node.id, idx);
+        if (this._sceneSwitchBusy) return;
+        this._sceneSwitchBusy = true;
+        try {
+          const idx  = parseInt(btn.dataset.index, 10);
+          const node = this._currentNode();
+          if (!node) return;
+          await setNodeActiveImageIndex(node.id, idx);
 
-        // A linked scene may currently be shown instead of the node's own scene —
-        // bring the canvas back now that an image was picked.
-        if (node.sceneId) {
-          const scene = game.scenes.get(node.sceneId);
-          if (scene) await scene.view();
-          for (const user of game.users) {
-            if (user.isGM || !user.active) continue;
-            if (user.getFlag("click-adventure", "currentNodeId") !== node.id) continue;
-            await globalThis.ClickAdventure._socket.viewSceneForUser(node.sceneId, user.id);
+          // A linked scene may currently be shown instead of the node's own scene —
+          // bring the canvas back now that an image was picked.
+          if (node.sceneId) {
+            const scene = game.scenes.get(node.sceneId);
+            if (scene) await scene.view();
+            for (const user of game.users) {
+              if (user.isGM || !user.active) continue;
+              if (user.getFlag("click-adventure", "currentNodeId") !== node.id) continue;
+              await globalThis.ClickAdventure._socket.viewSceneForUser(node.sceneId, user.id);
+            }
           }
-        }
 
-        this.render({ force: true });
+          this.render({ force: true });
+        } finally {
+          this._sceneSwitchBusy = false;
+        }
       });
     });
 
     html.querySelectorAll("[data-action='switch-linked-scene']").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        const sceneId = btn.dataset.sceneId;
-        const scene   = game.scenes.get(sceneId);
-        if (!scene) {
-          ui.notifications.error("Click Adventure: Linked scene not found. It may have been deleted.");
-          return;
+        if (this._sceneSwitchBusy) return;
+        this._sceneSwitchBusy = true;
+        try {
+          const sceneId = btn.dataset.sceneId;
+          const scene   = game.scenes.get(sceneId);
+          if (!scene) {
+            ui.notifications.error("Click Adventure: Linked scene not found. It may have been deleted.");
+            return;
+          }
+          const node = this._currentNode();
+          if (!node) return;
+
+          // Persist so navigating away and back shows this linked scene again, instead
+          // of always reverting to the node's own scene.
+          const entry = node.linkedScenes?.find(ls => ls.sceneId === sceneId);
+          await setNodeActiveLinkedScene(node.id, entry?.id ?? null);
+
+          // Guide mode "Activate (global)": mirror the node-to-node nav behavior —
+          // real scene.activate() so Foundry's scene-bound playlist actually triggers.
+          // "View" mode (or non-GM) keeps the per-client socket teleport below.
+          const guideActivate = game.user.isGM
+            && game.settings.get("click-adventure", "gmNavigationMode") === "guide"
+            && game.settings.get("click-adventure", "guideModeAction") === "activate";
+
+          if (guideActivate) {
+            await scene.activate();
+          } else {
+            // GM: switch view locally
+            await scene.view();
+
+            // Players on this node: send via socket
+            for (const user of game.users) {
+              if (user.isGM || !user.active) continue;
+              if (user.getFlag("click-adventure", "currentNodeId") !== node.id) continue;
+              await globalThis.ClickAdventure._socket.viewSceneForUser(sceneId, user.id);
+            }
+          }
+
+          this.render({ force: true });
+        } finally {
+          this._sceneSwitchBusy = false;
         }
-        const node = this._currentNode();
-        if (!node) return;
-
-        // Persist so navigating away and back shows this linked scene again, instead
-        // of always reverting to the node's own scene.
-        const entry = node.linkedScenes?.find(ls => ls.sceneId === sceneId);
-        await setNodeActiveLinkedScene(node.id, entry?.id ?? null);
-
-        // GM: switch view locally
-        await scene.view();
-
-        // Players on this node: send via socket
-        for (const user of game.users) {
-          if (user.isGM || !user.active) continue;
-          if (user.getFlag("click-adventure", "currentNodeId") !== node.id) continue;
-          await globalThis.ClickAdventure._socket.viewSceneForUser(sceneId, user.id);
-        }
-
-        this.render({ force: true });
       });
     });
 

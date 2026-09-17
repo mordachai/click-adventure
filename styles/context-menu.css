@@ -87,3 +87,16 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* Toolbar dropdown variant — anchored under a button instead of at click coordinates */
+.ca-reset-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.ca-reset-menu-wrapper .ca-context-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: auto;
+  right: 0;
+}

@@ -160,7 +160,11 @@ export async function setNodeActiveLinkedScene(nodeId, linkedSceneId) {
  *   "custom" — Visible to everyone like "blocked", but traversable only once the player
  *              satisfies the passage's `keys` (see evaluatePassageKeys) — an item they must
  *              own, a specific actor, a macro that returns true, or a scene they've
- *              visited. The GM always bypasses the check.
+ *              visited. The GM always bypasses the check. Its `lockedVisibility` field
+ *              ("blocked" | "secret", default "blocked") controls whether players see it
+ *              at all before the keys are satisfied: "blocked" shows it always (key icon);
+ *              "secret" hides it from the nav HUD entirely until unlocked, same as the
+ *              "secret" state, then reveals it like a normal custom passage.
  */
 
 /**
@@ -295,6 +299,16 @@ export async function markSceneVisited(user, sceneId) {
   const visited = user.getFlag(MODULE_ID, "visitedSceneIds") ?? [];
   if (visited.includes(sceneId)) return;
   await user.setFlag(MODULE_ID, "visitedSceneIds", [...visited, sceneId]);
+}
+
+/**
+ * Clears a user's visited-scene history — undoes markSceneVisited so "scene visited" key
+ * conditions (see evaluatePassageKeys) re-lock. Idempotent: a no-op when already empty.
+ * @param {User} user
+ * @returns {Promise<void>}
+ */
+export async function clearVisitedScenes(user) {
+  await user.unsetFlag(MODULE_ID, "visitedSceneIds");
 }
 
 /**

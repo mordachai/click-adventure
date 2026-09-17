@@ -30,10 +30,16 @@
       <div class="ca-passage-keys">
         <div class="ca-passage-keys-header">
           <span class="ca-label">Keys required</span>
-          <button type="button" class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-key-mode" data-index="{{index}}"
-                  title="AND: every key below is required to pass. OR: having any one of them is enough.">
-            {{keyMode}}
-          </button>
+          <div class="ca-passage-keys-header-actions">
+            <button type="button" class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-locked-visibility" data-index="{{index}}"
+                    title="Blocked: visible to players (key icon) even before they have the keys. Secret: hidden from players entirely until the keys are satisfied.">
+              {{#if (eq lockedVisibility "secret")}}<i class="fa-solid fa-mask"></i>{{else}}<i class="fa-solid fa-ban"></i>{{/if}} {{lockedVisibility}}
+            </button>
+            <button type="button" class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-key-mode" data-index="{{index}}"
+                    title="AND: every key below is required to pass. OR: having any one of them is enough.">
+              {{keyMode}}
+            </button>
+          </div>
         </div>
         <p class="ca-hint">Drag an Item, Actor, Macro, or Scene here to use it as a key. {{#if (eq keyMode "OR")}}Any one of the keys below is enough to pass.{{else}}All of the keys below are required to pass.{{/if}}</p>
         <div class="ca-dropzone ca-passage-key-dropzone" data-index="{{index}}">

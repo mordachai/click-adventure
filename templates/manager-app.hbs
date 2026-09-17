@@ -45,11 +45,22 @@
     {{!-- Spacer pushes Reset and Instructions to the far right --}}
     <span class="ca-toolbar-spacer"></span>
 
-    <button class="ca-reset-macros ca-toolbar-pill" type="button"
-            title="Reset all once-executed macros across all nodes"
-            {{#unless resetMacrosCount}}disabled{{/unless}}>
-      Reset Macros ({{resetMacrosCount}})
-    </button>
+    <div class="ca-reset-menu-wrapper">
+      <button class="ca-reset-menu-toggle ca-toolbar-pill" type="button" title="Reset options">
+        Reset <i class="fa-solid fa-caret-down" aria-hidden="true"></i>
+      </button>
+      <div class="ca-reset-menu ca-context-menu" hidden>
+        <div class="ca-context-menu-item ca-reset-macros{{#unless resetMacrosCount}} ca-context-menu-item--active{{/unless}}"
+             title="Reset all once-executed macros across all nodes">
+          Reset Macros ({{resetMacrosCount}})
+        </div>
+        <div class="ca-context-menu-divider"></div>
+        <div class="ca-context-menu-item ca-reset-visited-scenes"
+             title="Clear every player's visited-scene history (used by &quot;scene visited&quot; key conditions)">
+          Reset Visited Scenes
+        </div>
+      </div>
+    </div>
     <span class="ca-toolbar-sep"></span>
     <button class="ca-settings-btn" type="button" aria-label="Settings" title="Settings">
       <i class="fa-solid fa-gear" aria-hidden="true"></i>

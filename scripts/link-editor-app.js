@@ -136,6 +136,7 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
         state,
         hasCustom: state === "custom",
         keyMode: p.keyMode ?? "AND",
+        lockedVisibility: p.lockedVisibility ?? "blocked",
         keys: (p.keys ?? []).map((k, ki) => ({ ...k, keyIndex: ki }))
       };
     });
@@ -231,6 +232,15 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
         const i = parseInt(btn.dataset.index, 10);
         const current = this._pendingPassages[i].keyMode ?? "AND";
         this._pendingPassages[i] = { ...this._pendingPassages[i], keyMode: current === "AND" ? "OR" : "AND" };
+        this.render({ force: true });
+      });
+    });
+
+    html.querySelectorAll(".ca-passage-locked-visibility").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.index, 10);
+        const current = this._pendingPassages[i].lockedVisibility ?? "blocked";
+        this._pendingPassages[i] = { ...this._pendingPassages[i], lockedVisibility: current === "blocked" ? "secret" : "blocked" };
         this.render({ force: true });
       });
     });

@@ -1,3 +1,13 @@
+# 0.2.14
+
+## [Added]
+- **Custom passages can now stay fully hidden until unlocked.** A new "Locked visibility" toggle (Blocked/Secret) on each Custom passage in the Passage Editor controls whether players see a key icon before satisfying its keys (Blocked, the old behavior) or see nothing at all, same as a Secret passage, until it unlocks (Secret).
+- **Reset Visited Scenes.** The Manager toolbar's Reset button is now a dropdown with a second option to clear every player's visited-scene history, re-locking any "scene visited" key conditions so a playthrough can restart fresh.
+
+## [Fixed]
+- **Guide Mode's "Activate (global)" setting was ignored when switching a node's linked scenes.** It only applied to node-to-node navigation, so a node's own Foundry scene activated (and its scene-bound playlist started) correctly, but cycling between a node's *linked* scenes always fell back to the per-client "view" behavior — meaning scene-bound music never played when switching linked scenes, even with Guide Mode set to Activate. Linked-scene switching now honors the same setting.
+- **Rapid double-clicks on the image/linked-scene switcher could race.** Clicking again before the previous switch's scene.view()/socket chain settled could let the two overlapping calls land out of order on a player's client, leaving their canvas stuck on a stale scene until they navigated away and back. A busy-guard now ignores a click while the previous switch is still in flight.
+
 # 0.2.13
 
 ## [Changed]

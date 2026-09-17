@@ -124,10 +124,20 @@
   justify-content: space-between;
 }
 
+.click-adventure.link-editor .ca-passage-keys-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ca-space-2);
+}
+
 .click-adventure.link-editor .ca-passage-key-mode {
   color: var(--ca-state-custom);
   border-color: var(--ca-state-custom);
   min-width: 44px;
+}
+
+.click-adventure.link-editor .ca-passage-locked-visibility {
+  min-width: 66px;
 }
 
 .click-adventure.link-editor .ca-passage-key-dropzone {

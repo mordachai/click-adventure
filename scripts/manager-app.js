@@ -35,7 +35,7 @@ import {
   buildOccupants, buildPlayerPanelData, patchOccupantAvatars, patchRequestsDrawer,
   approveRequest, onApproveAll, rejectRequest,
   onNodeContextMenu,
-  lockAllPlayers, unlockAllPlayers
+  lockAllPlayers, unlockAllPlayers, onResetVisitedScenes
 } from "./manager-players.js";
 import {
   onAddNode, onImportFolder, onSyncScenes, onResetMacros,
@@ -375,7 +375,31 @@ export class ManagerApp extends HandlebarsApplicationMixin(ApplicationV2) {
     html.querySelector(".ca-import-folder")?.addEventListener("click", () => onImportFolder(this));
     html.querySelector(".ca-sync-scenes")?.addEventListener("click", () => onSyncScenes(this));
 
-    html.querySelector(".ca-reset-macros")?.addEventListener("click", () => onResetMacros(this));
+    // Reset dropdown — toggled open/closed, closes on any outside click. The
+    // outside-click listener is only attached while open and removes itself,
+    // so repeated renders never pile up document-level listeners.
+    const resetMenu = html.querySelector(".ca-reset-menu");
+    const closeResetMenu = e => {
+      if (resetMenu.contains(e.target)) return;
+      resetMenu.hidden = true;
+      document.removeEventListener("mousedown", closeResetMenu);
+    };
+    html.querySelector(".ca-reset-menu-toggle")?.addEventListener("click", e => {
+      e.stopPropagation();
+      if (!resetMenu) return;
+      resetMenu.hidden = !resetMenu.hidden;
+      if (!resetMenu.hidden) {
+        setTimeout(() => document.addEventListener("mousedown", closeResetMenu), 0);
+      }
+    });
+    resetMenu?.querySelector(".ca-reset-macros")?.addEventListener("click", () => {
+      resetMenu.hidden = true;
+      onResetMacros(this);
+    });
+    resetMenu?.querySelector(".ca-reset-visited-scenes")?.addEventListener("click", () => {
+      resetMenu.hidden = true;
+      onResetVisitedScenes();
+    });
 
     html.querySelector(".ca-autolock-toggle")?.addEventListener("click", async () => {
       const current = game.settings.get("click-adventure", "autolockDefault");
