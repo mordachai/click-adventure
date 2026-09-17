@@ -119,36 +119,38 @@
 
     <h3>Interacting with Links</h3>
     <ul>
-      <li>Click a link — cycle its <strong>direction</strong>: Both ways → Forward → Backward → Both ways (single-passage links only)</li>
-      <li><kbd>Ctrl</kbd> (<kbd>Cmd</kbd> on Mac) + click a link — cycle its <strong>state</strong>: Open → Blocked → Secret → Custom → Open (single-passage links only)</li>
+      <li>Click a link — cycle its direction (single-passage links only)</li>
+      <li><kbd>Ctrl</kbd> (<kbd>Cmd</kbd> on Mac) + click a link — cycle its state (single-passage links only)</li>
       <li><kbd>Shift</kbd> + click a link — open the passage editor</li>
       <li>Right-click a link — delete (with confirmation)</li>
     </ul>
-    <p>Direction and state are independent — a link is always one of the three directions <em>and</em> one of the four states at the same time. Landing on Custom opens the Passage Editor immediately, since that's the only place a passage's keys can be configured.</p>
+    <p>Every link has a <strong>direction</strong> and a <strong>state</strong> at the same time, set independently. Picking the Custom state opens the passage editor right away, since that's the only place its keys can be set.</p>
 
-    <h3>Direction &amp; State</h3>
+    <h3>Direction</h3>
     <ul>
       <li><strong class="ca-swatch ca-swatch--open">⟷ Both ways</strong> — players can travel either direction</li>
       <li><strong class="ca-swatch ca-swatch--directional">→ Forward only</strong> — one-way from source to target</li>
       <li><strong class="ca-swatch ca-swatch--directional">← Backward only</strong> — one-way from target to source</li>
     </ul>
+
+    <h3>State</h3>
     <ul>
-      <li><strong>Open</strong> — normal traversal, no restriction</li>
-      <li><strong class="ca-swatch ca-swatch--blocked">⊘ Blocked</strong> — red — visible to players but not traversable (hints at a locked passage)</li>
-      <li><strong class="ca-swatch ca-swatch--secret"><i class="fa-solid fa-mask"></i> Secret</strong> — purple — hidden from players entirely; the GM sees it marked as a secret passage and can still cross it</li>
-      <li><strong class="ca-swatch ca-swatch--custom">🔑 Custom</strong> — blue — visible to everyone like Blocked, but traversable only once the player satisfies the passage's keys (see <em>Custom Keys</em> below); the GM always bypasses the check</li>
+      <li><strong>Open</strong> — no restriction</li>
+      <li><strong class="ca-swatch ca-swatch--blocked">⊘ Blocked</strong> — red — players see it but can't cross it</li>
+      <li><strong class="ca-swatch ca-swatch--secret"><i class="fa-solid fa-mask"></i> Secret</strong> — purple — hidden from players; the GM sees it marked and can still cross it</li>
+      <li><strong class="ca-swatch ca-swatch--custom">🔑 Custom</strong> — blue — visible like Blocked, but only crossable once the player's key conditions are met (see <em>Custom Keys</em> below)</li>
     </ul>
-    <p>Both ways + a state applies it on both sides at once — the simplest case. But direction and state combine freely: <strong>Forward + Blocked</strong> is open and visible going source → target, while target → source is visible with a ⊘ but not traversable. <strong>Forward + Secret</strong> is the same but the reverse direction is hidden from players entirely instead of merely locked. Swap in Backward for the mirror image, or Custom for a keyed reverse side. This is how a door gets bolted from one side only, or a secret passage stays hidden from one room but is a plain doorway from the other. On the Manager canvas the link keeps the usual arrow for its open direction and gains a small secondary mark (⊘ / 🎭 / 🔑) near the closed side.</p>
+    <p>The GM always bypasses Blocked, Secret and Custom. On a Both-ways link the state applies to both sides equally. On a Forward/Backward link it applies only to the closed side — e.g. <strong>Forward + Secret</strong> is a normal doorway going source → target, and a hidden passage going the other way. That's how a door gets bolted from one side only. The Manager canvas shows the usual arrow for the open direction plus a small ⊘ / 🎭 / 🔑 mark for the closed side.</p>
 
     <h3>Custom Keys</h3>
-    <p>When a passage's state is Custom, its row in the Passage Editor grows a keys panel. Drag an <strong>Item</strong>, <strong>Actor</strong>, <strong>Macro</strong>, or <strong>Scene</strong> from a sidebar onto it to add a key:</p>
+    <p>A Custom-state passage's row in the passage editor grows a keys panel. Drag any of these onto it:</p>
     <ul>
-      <li><strong>🎒 Item</strong> — the traversing player's assigned character must own an item matching this one</li>
-      <li><strong>👤 Actor</strong> — the traversing player's assigned character must be this specific Actor</li>
-      <li><strong>⚡ Macro</strong> — the macro is run and must return <code>true</code> for the passage to open</li>
-      <li><strong>🗺️ Scene</strong> — the traversing player must have personally visited this Scene before (tracked per-player from the moment they first arrive there)</li>
+      <li><strong>🎒 Item</strong> — player's character must own it</li>
+      <li><strong>👤 Actor</strong> — player's character must be it</li>
+      <li><strong>⚡ Macro</strong> — must run and return <code>true</code></li>
+      <li><strong>🗺️ Scene</strong> — player must have visited it before</li>
     </ul>
-    <p>The <strong>AND / OR</strong> button in the panel's header decides how multiple keys combine: AND requires every key, OR requires just one. An empty key list behaves like Open — picking Custom doesn't lock a passage until at least one key is added. The check runs when a player clicks the destination, not while the HUD is simply open, so a Macro key's side effects only ever run on an actual attempt to pass. The GM is never checked and can always cross.</p>
+    <p>The <strong>AND / OR</strong> button decides whether every key is required or just one. No keys set behaves like Open. Keys are only checked when a player actually clicks the destination — not while the HUD is merely open.</p>
 
     <h3>Multi-Passage Links</h3>
     <p><kbd>Shift</kbd> + click any link to open the passage editor and add multiple named passages between two nodes. Each passage has its own direction and state. Multi-passage links appear <strong class="ca-swatch ca-swatch--secret">purple</strong> with a thicker line and a ⊕ marker.</p>
@@ -164,8 +166,8 @@
         </ul>
         The GM always sees the full format regardless of this setting.
       </li>
-      <li><strong>Direction button</strong> (⟷ / → / ←) — cycles that passage's direction: Both ways → Forward → Backward → Both ways</li>
-      <li><strong>State button</strong> (O / ⊘ / <i class="fa-solid fa-mask"></i> / C) — cycles that passage's state: Open → Blocked → Secret → Custom → Open, independently of direction — see <em>Direction &amp; State</em> above</li>
+      <li><strong>Direction button</strong> (⟷ / → / ←) — cycles that passage's direction, same as above</li>
+      <li><strong>State button</strong> (O / ⊘ / <i class="fa-solid fa-mask"></i> / C) — cycles that passage's state, same as above, independently of direction</li>
       <li><strong>✕ button</strong> — removes the passage row</li>
     </ul>
     <p>The footer holds <strong>Add passage</strong> on the left — plus <strong>Convert to single</strong> on a multi-passage link, which keeps only the first passage and restores simple link behaviour — and <strong>Save</strong> on the right.</p>

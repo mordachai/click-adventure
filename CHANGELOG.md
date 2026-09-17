@@ -1,3 +1,8 @@
+# 0.2.8
+
+## [Changed]
+- **The Links instructions tab is simpler and matches the current icons.** Direction and State are now two short sections instead of one dense one, the Blocked/Secret/Custom colors and icons shown match what the canvas and HUD actually render (⊘ red for Blocked, mask purple for Secret, 🔑 blue for Custom), and the Custom Keys and Passage Editor sections were tightened.
+
 # 0.2.7
 
 ## [Added]
