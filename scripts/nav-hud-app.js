@@ -282,10 +282,12 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
     // ─────────────────────────────────────────────────────────────────────
 
     // ── Mark destinations blocked when the player is currently locked ─────
+    // Kept independent of dest.blocked: that's a link-state concept with its own icon/handling
+    // above (and its own click-guard), so folding it in here only doubled up the icon shown.
     const playerIsLocked = !game.user.isGM && isUserLocked(game.userId);
     context.playerIsLocked = playerIsLocked;
     for (const dest of availableDestinations) {
-      dest.autolocked = playerIsLocked || dest.blocked;
+      dest.autolocked = playerIsLocked;
     }
     // ─────────────────────────────────────────────────────────────────────
 

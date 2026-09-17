@@ -244,6 +244,28 @@ export function renderLinks(app) {
       indicator.style.pointerEvents = "none";
       indicator.textContent = "⊕";
       svg.appendChild(indicator);
+
+      // A multi-passage link's own passages can each carry a different state, which the
+      // single "⊕" glyph above can't show. Flag it here with a small secondary badge —
+      // the most restrictive state found across any passage — so the GM sees at a glance
+      // that opening the Passage Editor is worth doing, without cluttering the main glyph.
+      const passageStates = link.passages
+        .map(p => decomposeDirection(p.direction ?? "both").stateAxis)
+        .filter(s => s !== "open");
+      const worstState = ["custom", "secret", "blocked"].find(s => passageStates.includes(s));
+      if (worstState) {
+        const badgePoint = pathMidpoint(p1, c1, p2, c2, 0.7);
+        const badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        badge.classList.add("ca-link-direction", "ca-link-direction--secondary");
+        badge.setAttribute("x", badgePoint.x);
+        badge.setAttribute("y", badgePoint.y);
+        badge.setAttribute("text-anchor", "middle");
+        badge.setAttribute("dominant-baseline", "central");
+        badge.dataset.direction = worstState;
+        badge.style.pointerEvents = "none";
+        badge.textContent = _stateGlyph(worstState);
+        svg.appendChild(badge);
+      }
     } else if (decomposeDirection(direction).dirAxis === "both") {
       const { stateAxis } = decomposeDirection(direction);
       const indicator = document.createElementNS("http://www.w3.org/2000/svg", "text");

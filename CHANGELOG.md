@@ -1,3 +1,9 @@
+# 0.2.10
+
+## [Fixed]
+- **A multi-passage link's canvas glyph now reflects passage state.** Previously any multi-passage link always showed only "⊕" regardless of whether one of its passages was Blocked/Secret/Custom — cycling a passage's state produced no visible change. It now shows a small secondary badge with the most restrictive state found across the link's passages.
+- **Blocked destinations in the player HUD no longer also show a padlock icon.** The HUD's "player is autolocked by the GM" flag was wrongly also set whenever a destination was merely link-state Blocked, stacking a lock icon on top of the ban icon it already gets. The two are unrelated (the click-guard already handles Blocked on its own) — separated them.
+
 # 0.2.9
 
 ## [Fixed]
