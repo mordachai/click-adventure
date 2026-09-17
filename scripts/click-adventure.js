@@ -312,6 +312,15 @@ Hooks.on("init", () => {
     default: false
   });
 
+  game.settings.register(MODULE_ID, "journalAutoOpen", {
+    name: "Journal Auto-Open",
+    hint: "Automatically opens a node's journal page when its trigger condition (view/activate) is met. Disable during testing and setup, or once the adventure is well known.",
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: true
+  });
+
   game.settings.register(MODULE_ID,"orbStyle", {
     name: "HUD Button Style",
     hint: "Visual appearance of the navigation HUD button. Configured by the GM; applies to all players.",

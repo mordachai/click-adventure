@@ -1,3 +1,8 @@
+# 0.2.3
+
+## [Added]
+- **Journal Auto-Open switch, in Settings → HUD.** Turns off the automatic journal opening triggered by a node's `journalTrigger` (view/activate/both) without touching the trigger configured on each node. Useful during testing and setup, or once the GM already knows the adventure by heart and the pop-ups just get in the way. Enabled by default, matching prior behaviour.
+
 # 0.2.2
 
 ## [Changed]

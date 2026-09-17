@@ -62,6 +62,18 @@
       </div>
       <p class="ca-hint ca-setting-card-desc">When enabled, players can hover the eye icon on a destination to preview its room image before entering. The GM always sees previews.</p>
     </div>
+
+    <div class="ca-card ca-setting-card">
+      <div class="ca-setting-card-main">
+        <label class="ca-label ca-settings-label">Journal Auto-Open</label>
+        <button type="button" role="switch" data-setting="journalAutoOpen"
+                aria-checked="{{#if journalAutoOpen}}true{{else}}false{{/if}}"
+                class="ca-switch {{#if journalAutoOpen}}ca-switch--on{{/if}}">
+          <span class="ca-switch-track"><span class="ca-switch-knob"></span></span>
+        </button>
+      </div>
+      <p class="ca-hint ca-setting-card-desc">When disabled, journal pages no longer open automatically on scene view/activate. Useful during testing and setup, or once the adventure is well known.</p>
+    </div>
   </div>
 
   {{!-- ── Tokens ─────────────────────────────────────────────────────── --}}

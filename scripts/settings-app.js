@@ -80,6 +80,7 @@ export class SettingsApp extends HandlebarsApplicationMixin(ApplicationV2) {
     context.useDefaultTokenPositions = game.settings.get("click-adventure", "useDefaultTokenPositions");
     context.showPlayerWhisper = game.settings.get("click-adventure", "showPlayerWhisper");
     context.playerDestinationPreview = game.settings.get("click-adventure", "playerDestinationPreview");
+    context.journalAutoOpen = game.settings.get("click-adventure", "journalAutoOpen");
 
     return context;
   }

@@ -159,6 +159,8 @@ export async function setNodeMusic(node, ref) {
  * @returns {Promise<void>}
  */
 export async function openNodeJournal(node, trigger) {
+  if (!game.settings.get("click-adventure", "journalAutoOpen")) return;
+
   const configured = node?.journalTrigger ?? DEFAULT_JOURNAL_TRIGGER;
   if (configured !== trigger && configured !== "both") return;
 

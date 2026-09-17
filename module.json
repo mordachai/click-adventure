@@ -2,7 +2,7 @@
   "id": "click-adventure",
   "title": "Click Adventure",
   "description": "Point-and-click adventure game module.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "compatibility": {
     "minimum": "14",
     "verified": "14",
