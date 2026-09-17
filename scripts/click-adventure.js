@@ -214,10 +214,16 @@ Hooks.on("ready", async () => {
 Hooks.on("init", () => {
   Handlebars.registerHelper("eq", (a, b) => a === b);
 
-  // Returns a Unicode glyph for a passage direction value.
-  Handlebars.registerHelper("caDirectionIcon", dir => {
-    const icons = { both: "⟷", forward: "→", backward: "←", blocked: "✕", locked: "⊘" };
-    return icons[dir] ?? "?";
+  // Returns a Unicode glyph for a passage's direction axis (both/forward/backward).
+  Handlebars.registerHelper("caDirectionAxisIcon", dirAxis => {
+    const icons = { both: "⟷", forward: "→", backward: "←" };
+    return icons[dirAxis] ?? "?";
+  });
+
+  // Returns a Unicode glyph for a passage's state axis (open/blocked/locked).
+  Handlebars.registerHelper("caStateAxisIcon", stateAxis => {
+    const icons = { open: "•", blocked: "✕", locked: "⊘" };
+    return icons[stateAxis] ?? "?";
   });
 
   // Legacy single-graph setting — kept registered so existing data is never orphaned.

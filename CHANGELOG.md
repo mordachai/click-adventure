@@ -1,3 +1,9 @@
+# 0.2.6
+
+## [Changed]
+- **Link direction and state are now two independent controls instead of one long click-cycle.** 0.2.5 added one-way block/lock combos to a single 9-step cycle (Both → Forward → Forward-blocked → Forward-locked → Backward → …), which meant clicking up to 8 times to reach a given state. A link's traversal mode is really two separate choices — which side(s) are open (Both / Forward / Backward) and what happens elsewhere (Open / Blocked / Locked) — so it's now edited that way: plain click on a single-passage link cycles **direction** (Both → Forward → Backward → Both), Ctrl/Cmd + click cycles **state** (Open → Blocked → Locked → Open), and the two combine freely to produce the same 9 stored states as before.
+- **The Passage Editor's single direction button is now two buttons** (direction, then state), reached the same way. This also lifts a prior restriction: a named passage could only ever be Both/Forward/Backward/Locked — Blocked, and the four one-way combos, were not reachable there. They now are.
+
 # 0.2.5
 
 ## [Added]

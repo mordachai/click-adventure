@@ -14,8 +14,10 @@
               title="{{#if displayModeIsPathOnly}}Players see: Path Name only{{else}}Players see: Full Name (Path Name){{/if}}">
         {{#if displayModeIsPathOnly}}P{{else}}F{{/if}}
       </button>
-      <button class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-direction" type="button" title="Click to cycle direction"
-              data-direction="{{direction}}">{{caDirectionIcon direction}}</button>
+      <button class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-direction" type="button" title="Click to cycle direction: Both way / Forward / Backward"
+              data-dir-axis="{{dirAxis}}">{{caDirectionAxisIcon dirAxis}}</button>
+      <button class="ca-btn ca-btn--quiet ca-btn--sm ca-passage-state" type="button" title="Click to cycle state: Open / Blocked (secret) / Locked"
+              data-state-axis="{{stateAxis}}">{{caStateAxisIcon stateAxis}}</button>
       <button class="ca-btn ca-btn--ghost-danger ca-btn--sm ca-passage-remove" type="button" title="Remove passage">✕</button>
     </li>
     {{/each}}

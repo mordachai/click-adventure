@@ -84,6 +84,7 @@
 
 .click-adventure.link-editor .ca-display-mode-toggle,
 .click-adventure.link-editor .ca-passage-direction,
+.click-adventure.link-editor .ca-passage-state,
 .click-adventure.link-editor .ca-passage-remove {
   flex-shrink: 0;
   min-width: 34px;

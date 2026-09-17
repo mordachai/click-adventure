@@ -125,14 +125,10 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (isMultiPassage(link)) {
         for (const passage of link.passages) {
           const passDir = passage.direction ?? "both";
-          if (passDir === "blocked") continue;
-          if (passDir === "both") {
-            if ((link.sourceId === node.id && link.targetId === targetNodeId) ||
-                (link.targetId === node.id && link.sourceId === targetNodeId)) return true;
-          } else if (passDir === "forward" && link.sourceId === node.id && link.targetId === targetNodeId) {
-            return true;
-          } else if (passDir === "backward" && link.targetId === node.id && link.sourceId === targetNodeId) {
-            return true;
+          if (link.sourceId === node.id && link.targetId === targetNodeId) {
+            if (getLinkStateFromSide(passDir, "source") === "open") return true;
+          } else if (link.targetId === node.id && link.sourceId === targetNodeId) {
+            if (getLinkStateFromSide(passDir, "target") === "open") return true;
           }
         }
       } else {
@@ -176,32 +172,15 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           // Each passage is listed as its own destination button (no dedup — distinct traversal options)
           for (const passage of link.passages) {
             const passDir = passage.direction ?? "both";
-            // Non-GMs never see blocked passages; GMs see them as "secret"
-            if (passDir === "blocked" && !game.user.isGM) continue;
-            let otherId = null;
+            const side = link.sourceId === node.id ? "source" : (link.targetId === node.id ? "target" : null);
+            if (!side) continue;
+            const state = getLinkStateFromSide(passDir, side);
+            // Non-GMs never see blocked passages (or the blocked side of a one-way combo);
+            // GMs see them as "secret". "none" = closed side of a plain one-way passage.
+            if (state === "none") continue;
+            if (state === "blocked" && !game.user.isGM) continue;
 
-            let passLocked = false;
-            let passSecret = false;
-            if (passDir === "both") {
-              if (link.sourceId === node.id)      otherId = link.targetId;
-              else if (link.targetId === node.id) otherId = link.sourceId;
-            } else if (passDir === "forward" && link.sourceId === node.id) {
-              otherId = link.targetId;
-            } else if (passDir === "backward" && link.targetId === node.id) {
-              otherId = link.sourceId;
-            } else if (passDir === "locked") {
-              // Visible in HUD but not navigable — mirrors single-passage "locked" behaviour
-              if (link.sourceId === node.id)      otherId = link.targetId;
-              else if (link.targetId === node.id) otherId = link.sourceId;
-              passLocked = true;
-            } else if (passDir === "blocked") {
-              // Only reached by GM — shown as secret (purple + mask icon), fully navigable
-              if (link.sourceId === node.id)      otherId = link.targetId;
-              else if (link.targetId === node.id) otherId = link.sourceId;
-              passSecret = true;
-            }
-
-            if (!otherId) continue;
+            const otherId = side === "source" ? link.targetId : link.sourceId;
             const other = nodes.find(n => n.id === otherId);
             if (!other) continue;
             const navName = other.label || game.scenes.get(other.sceneId)?.name || other.id;
@@ -210,7 +189,11 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
             // two lines — joined on one line they truncate before the passage is readable.
             const label    = isPathOnly ? (passage.label || navName) : navName;
             const sublabel = isPathOnly ? null : (passage.label || null);
-            availableDestinations.push({ id: other.id, label, sublabel, locked: passLocked, secret: passSecret });
+            availableDestinations.push({
+              id: other.id, label, sublabel,
+              locked: state === "locked",
+              secret: state === "blocked"
+            });
           }
         } else {
           // Single-passage: existing direction logic; dedup so the same node appears only once

@@ -144,14 +144,21 @@ export async function setNodeActiveLinkedScene(nodeId, linkedSceneId) {
 }
 
 /**
- * Ordered direction cycle used when the GM clicks a link to change its traversal mode.
- * Each key is the current state; the value is the next state in the cycle.
- * All 9 states are persisted in the graph data — none is display-only.
+ * A link/passage's traversal mode is stored as one flat string (both/forward/backward/
+ * blocked/locked/forward-blocked/backward-blocked/forward-locked/backward-locked), but the
+ * GM edits it as two independent axes:
+ *   - direction: "both" | "forward" | "backward" — which side(s) are the "normal" side.
+ *   - state:     "open" | "blocked" | "locked"   — what happens on the side(s) that
+ *                aren't plain "forward"/"backward" travel.
  *
- * State reference:
- *   "both"             — Bidirectional. Players on either side see the link and can traverse it.
- *   "forward"          — One-way: source → target only. Players on the target side do not see it.
- *   "backward"         — One-way: target → source only. Players on the source side do not see it.
+ * decomposeDirection/composeDirection convert between the flat string and the two axes;
+ * cycleLinkDirectionAxis/cycleLinkStateAxis step one axis while holding the other fixed —
+ * these are what the GM's two controls (direction click, state click) call.
+ *
+ * State reference (composed forms):
+ *   "both"             — Bidirectional, open. Players on either side see the link and can traverse it.
+ *   "forward"          — One-way, open: source → target only. Target side does not see it.
+ *   "backward"         — One-way, open: target → source only. Source side does not see it.
  *   "forward-blocked"  — Source → target is open and visible to everyone. Target → source is
  *                        completely hidden from players; the GM sees it as a secret passage.
  *   "backward-blocked" — Target → source is open and visible to everyone. Source → target is
@@ -167,30 +174,74 @@ export async function setNodeActiveLinkedScene(nodeId, linkedSceneId) {
  *                        Players can see the destination but clicking it does nothing.
  *                        Useful for hinting at a passage that hasn't been unlocked yet.
  *
- * The four "-blocked"/"-locked" combos let a passage be bolted, blocked or secret from one
+ * The four one-way block/lock combos let a passage be bolted, blocked or secret from one
  * side while remaining perfectly normal from the other — e.g. a door barred from the inside,
  * or a bookshelf that hides a passage on one side but is a plain doorway on the other.
- *
- * @type {Readonly<Record<string, string>>}
  */
-export const DIRECTION_CYCLE = Object.freeze({
-  both:                "forward",            // free → one-way forward
-  forward:             "forward-blocked",    // one-way forward → forward open, backward secret
-  "forward-blocked":   "forward-locked",     // forward open, backward secret → backward locked
-  "forward-locked":    "backward",           // forward open, backward locked → one-way backward
-  backward:            "backward-blocked",   // one-way backward → backward open, forward secret
-  "backward-blocked":  "backward-locked",    // backward open, forward secret → forward locked
-  "backward-locked":   "blocked",            // backward open, forward locked → completely hidden
-  blocked:             "locked",             // hidden → visible but not navigable
-  locked:              "both",               // locked → free (cycle restarts)
-});
+
+const DIRECTION_AXIS_CYCLE = Object.freeze({ both: "forward", forward: "backward", backward: "both" });
+const STATE_AXIS_CYCLE     = Object.freeze({ open: "blocked", blocked: "locked",   locked: "open"   });
+
+/**
+ * Splits a flat direction string into its direction axis (both/forward/backward) and
+ * state axis (open/blocked/locked).
+ * @param {string} direction
+ * @returns {{dirAxis: "both"|"forward"|"backward", stateAxis: "open"|"blocked"|"locked"}}
+ */
+export function decomposeDirection(direction) {
+  switch (direction) {
+    case "both":     return { dirAxis: "both",     stateAxis: "open" };
+    case "forward":  return { dirAxis: "forward",  stateAxis: "open" };
+    case "backward": return { dirAxis: "backward", stateAxis: "open" };
+    case "blocked":  return { dirAxis: "both",     stateAxis: "blocked" };
+    case "locked":   return { dirAxis: "both",     stateAxis: "locked" };
+    case "forward-blocked":  return { dirAxis: "forward",  stateAxis: "blocked" };
+    case "backward-blocked": return { dirAxis: "backward", stateAxis: "blocked" };
+    case "forward-locked":   return { dirAxis: "forward",  stateAxis: "locked" };
+    case "backward-locked":  return { dirAxis: "backward", stateAxis: "locked" };
+    default: return { dirAxis: "both", stateAxis: "open" };
+  }
+}
+
+/**
+ * Recomposes a direction axis and state axis back into the flat stored string.
+ * @param {"both"|"forward"|"backward"} dirAxis
+ * @param {"open"|"blocked"|"locked"} stateAxis
+ * @returns {string}
+ */
+export function composeDirection(dirAxis, stateAxis) {
+  if (stateAxis === "open") return dirAxis;
+  if (dirAxis === "both") return stateAxis;
+  return `${dirAxis}-${stateAxis}`;
+}
+
+/**
+ * Cycles the direction axis (both → forward → backward → both) while preserving the
+ * current state axis. Called when the GM clicks the direction control.
+ * @param {string} direction
+ * @returns {string}
+ */
+export function cycleLinkDirectionAxis(direction) {
+  const { dirAxis, stateAxis } = decomposeDirection(direction);
+  return composeDirection(DIRECTION_AXIS_CYCLE[dirAxis], stateAxis);
+}
+
+/**
+ * Cycles the state axis (open → blocked → locked → open) while preserving the current
+ * direction axis. Called when the GM clicks the state control.
+ * @param {string} direction
+ * @returns {string}
+ */
+export function cycleLinkStateAxis(direction) {
+  const { dirAxis, stateAxis } = decomposeDirection(direction);
+  return composeDirection(dirAxis, STATE_AXIS_CYCLE[stateAxis]);
+}
 
 /**
  * Resolves how a link may be traversed from one specific side, given its effective
- * direction. Single choke point for the 5 legacy states plus the 4 one-way block/lock
- * combos in {@link DIRECTION_CYCLE} — every consumer that gates or labels a destination
- * (the HUD, the "navigate back" check, the Visual Polls integration) goes through this
- * instead of re-deriving the combo logic itself.
+ * direction. Single choke point for all 9 states — every consumer that gates or labels a
+ * destination (the HUD, the "navigate back" check, the Visual Polls integration) goes
+ * through this instead of re-deriving the combo logic itself.
  *
  * @param {string} direction - value from getEffectiveDirection(link)
  * @param {"source"|"target"} side - which side of the link this query is "from"
@@ -229,17 +280,6 @@ export function splitOneWayState(direction) {
     default: return null;
   }
 }
-
-/** Cycle used for individual passages inside a multi-passage link. "blocked" is excluded
- *  because the "✕ Remove passage" button already serves that purpose more clearly.
- *  both → forward → backward → locked → both
- */
-export const PASSAGE_DIRECTION_CYCLE = Object.freeze({
-  both:     "forward",
-  forward:  "backward",
-  backward: "locked",
-  locked:   "both",
-});
 
 /**
  * Returns the active adventure graph as a plain object.

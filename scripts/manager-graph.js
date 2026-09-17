@@ -7,7 +7,7 @@
  */
 
 import { LinkEditorApp } from "./link-editor-app.js";
-import { getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, DIRECTION_CYCLE, splitOneWayState } from "./node-utils.js";
+import { getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, cycleLinkDirectionAxis, cycleLinkStateAxis, splitOneWayState } from "./node-utils.js";
 
 /**
  * Fixed node dimensions — must match CSS --ca-node-size.
@@ -179,9 +179,13 @@ export function renderLinks(app) {
       e.stopPropagation();
       // Peek links don't cycle and don't open the passage editor
       if (isPeek) return;
-      // Shift+click or multi-passage link → open editor; plain click on single-passage → cycle direction
+      // Shift+click or multi-passage link → open editor.
+      // Plain click on single-passage → cycle direction (both/forward/backward).
+      // Ctrl/Cmd+click on single-passage → cycle state (open/blocked/locked).
       if (e.shiftKey || multi) {
         new LinkEditorApp(i).render(true);
+      } else if (e.ctrlKey || e.metaKey) {
+        onCycleLinkState(app, i);
       } else {
         onCycleLink(app, i);
       }
@@ -273,13 +277,15 @@ export function renderLinks(app) {
 // ---------------------------------------------------------------------------
 
 /**
- * Cycles a link's direction through: both → forward → backward → blocked → locked → both.
- * Triggered by left-click on a .ca-link-hit element during renderLinks.
+ * Applies a direction-mutating function to a single-passage link and persists the result.
+ * Shared by onCycleLink and onCycleLinkState — both are a "read current direction, compute
+ * the next one, write it back" operation that only differs in which axis it cycles.
  * @param {ManagerApp} app
  * @param {number} linkIndex
+ * @param {(currentDir: string) => string} nextDirection
  * @returns {Promise<void>}
  */
-export async function onCycleLink(app, linkIndex) {
+async function _mutateLinkDirection(app, linkIndex, nextDirection) {
   const { sceneId, startNodeId, nodes, links } = getGraphData();
   const updatedLinks = links.map((l, i) => {
     if (i !== linkIndex) return l;
@@ -288,7 +294,7 @@ export async function onCycleLink(app, linkIndex) {
     // Multi-passage links are edited via LinkEditorApp — cycling is a no-op here
     if (isMultiPassage(l)) return l;
     const currentDir = l.passages?.[0]?.direction ?? l.direction ?? "both";
-    const newDir = DIRECTION_CYCLE[currentDir] ?? "both";
+    const newDir = nextDirection(currentDir);
     const updatedPassages = l.passages
       ? [{ ...l.passages[0], direction: newDir }]
       : [{ label: "", direction: newDir }];
@@ -300,6 +306,29 @@ export async function onCycleLink(app, linkIndex) {
   // Notify HUD immediately so destination list reflects the new link state
   const hud = globalThis.ClickAdventure._hud;
   if (hud?.rendered) hud.render({ force: true });
+}
+
+/**
+ * Cycles a link's direction axis: both → forward → backward → both. The state axis
+ * (open/blocked/locked) is preserved. Triggered by a plain click on a .ca-link-hit element.
+ * @param {ManagerApp} app
+ * @param {number} linkIndex
+ * @returns {Promise<void>}
+ */
+export async function onCycleLink(app, linkIndex) {
+  await _mutateLinkDirection(app, linkIndex, cycleLinkDirectionAxis);
+}
+
+/**
+ * Cycles a link's state axis: open → blocked → locked → open. The direction axis
+ * (both/forward/backward) is preserved. Triggered by a Ctrl/Cmd+click on a .ca-link-hit
+ * element.
+ * @param {ManagerApp} app
+ * @param {number} linkIndex
+ * @returns {Promise<void>}
+ */
+export async function onCycleLinkState(app, linkIndex) {
+  await _mutateLinkDirection(app, linkIndex, cycleLinkStateAxis);
 }
 
 /**

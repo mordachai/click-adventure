@@ -119,33 +119,31 @@
 
     <h3>Interacting with Links</h3>
     <ul>
-      <li>Click a link — cycle direction (single-passage links only)</li>
+      <li>Click a link — cycle its <strong>direction</strong>: Both ways → Forward → Backward → Both ways (single-passage links only)</li>
+      <li><kbd>Ctrl</kbd> (<kbd>Cmd</kbd> on Mac) + click a link — cycle its <strong>state</strong>: Open → Blocked → Locked → Open (single-passage links only)</li>
       <li><kbd>Shift</kbd> + click a link — open the passage editor</li>
       <li>Right-click a link — delete (with confirmation)</li>
     </ul>
+    <p>Direction and state are independent — a link is always one of the three directions <em>and</em> one of the three states at the same time.</p>
 
-    <h3>Direction Types</h3>
+    <h3>Direction &amp; State</h3>
     <ul>
-      <li><strong class="ca-swatch ca-swatch--open">⟷ Both ways</strong> — green — players can travel either direction</li>
-      <li><strong class="ca-swatch ca-swatch--directional">→ Forward only</strong> — amber — one-way from source to target</li>
-      <li><strong class="ca-swatch ca-swatch--directional">← Backward only</strong> — amber — one-way from target to source</li>
-      <li><strong class="ca-swatch ca-swatch--blocked">✕ Blocked</strong> — purple — hidden from players; cannot be traversed</li>
+      <li><strong class="ca-swatch ca-swatch--open">⟷ Both ways</strong> — players can travel either direction</li>
+      <li><strong class="ca-swatch ca-swatch--directional">→ Forward only</strong> — one-way from source to target</li>
+      <li><strong class="ca-swatch ca-swatch--directional">← Backward only</strong> — one-way from target to source</li>
+    </ul>
+    <ul>
+      <li><strong>Open</strong> — normal traversal, no restriction</li>
+      <li><strong class="ca-swatch ca-swatch--blocked">✕ Blocked</strong> — purple — hidden from players; the GM sees it as a secret passage and can still cross it</li>
       <li><strong class="ca-swatch ca-swatch--locked">⊘ Locked</strong> — red — visible to players but not traversable (hints at a locked passage)</li>
     </ul>
-    <p>Clicking a single-passage link cycles through them in order: Both → Forward → Forward (other side blocked) → Forward (other side locked) → Backward → Backward (other side blocked) → Backward (other side locked) → Blocked → Locked.</p>
-
-    <h3>One-Way Block / Lock</h3>
-    <p>The four combo states in that cycle let one side of a link be bolted, blocked or secret while the other stays perfectly normal — a door barred from the inside, or a bookshelf that hides a passage on one side but is a plain doorway on the other. The open side behaves exactly like a plain Forward/Backward link: visible and traversable by everyone. The other side behaves exactly like Blocked or Locked, but only from that side:</p>
-    <ul>
-      <li><strong>Forward, other side blocked</strong> / <strong>Backward, other side blocked</strong> — the closed side is hidden from players; the GM sees it marked with a small <strong class="ca-swatch ca-swatch--blocked">✕</strong> as a secret passage and can still traverse it</li>
-      <li><strong>Forward, other side locked</strong> / <strong>Backward, other side locked</strong> — the closed side is visible to players (marked with a small <strong class="ca-swatch ca-swatch--locked">⊘</strong>) but not traversable from there</li>
-    </ul>
+    <p>Both ways + Blocked and Both ways + Locked hide or lock the link on both sides at once — the two states most people reach for. But direction and state combine freely: <strong>Forward + Blocked</strong> is open and visible going source → target, while target → source is completely hidden from players (the GM still sees and can cross it as a secret passage). <strong>Forward + Locked</strong> is the same but the reverse direction is visible to players with a lock icon instead of hidden. Swap in Backward for the mirror image. This is how a door gets bolted from one side only, or a secret passage stays hidden from one room but is a plain doorway from the other. On the Manager canvas the link keeps the usual arrow for its open direction and gains a small secondary ✕/⊘ mark near the closed side.</p>
 
     <h3>Multi-Passage Links</h3>
     <p><kbd>Shift</kbd> + click any link to open the passage editor and add multiple named passages between two nodes. Each passage has its own direction rule. Multi-passage links appear <strong class="ca-swatch ca-swatch--blocked">purple</strong> with a thicker line and a ⊕ marker.</p>
 
     <h3>Passage Editor</h3>
-    <p>Each passage row has four controls:</p>
+    <p>Each passage row has five controls:</p>
     <ul>
       <li><strong>Name field</strong> — the path label shown to players (e.g. <em>Stairs</em>, <em>Dark Door</em>). Left blank, it is auto-filled as <em>Path 1</em>, <em>Path 2</em>, … on save</li>
       <li><strong>F / P button</strong> — controls how the destination button is labelled in the player HUD:
@@ -155,7 +153,8 @@
         </ul>
         The GM always sees the full format regardless of this setting.
       </li>
-      <li><strong>Direction button</strong> — cycles the traversal direction for that passage</li>
+      <li><strong>Direction button</strong> (⟷ / → / ←) — cycles that passage's direction: Both ways → Forward → Backward → Both ways</li>
+      <li><strong>State button</strong> (• / ✕ / ⊘) — cycles that passage's state: Open → Blocked → Locked → Open, independently of direction — see <em>Direction &amp; State</em> above</li>
       <li><strong>✕ button</strong> — removes the passage row</li>
     </ul>
     <p>The footer holds <strong>Add passage</strong> on the left — plus <strong>Convert to single</strong> on a multi-passage link, which keeps only the first passage and restores simple link behaviour — and <strong>Save</strong> on the right.</p>

@@ -9,7 +9,7 @@
  * Lifecycle hook: renderLinkEditorApp
  */
 
-import { getEffectiveDirection, getGraphData, saveGraphData, PASSAGE_DIRECTION_CYCLE } from "./node-utils.js";
+import { getEffectiveDirection, getGraphData, saveGraphData, decomposeDirection, cycleLinkDirectionAxis, cycleLinkStateAxis } from "./node-utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -78,12 +78,18 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const tgtNode = nodes.find(n => n.id === link.targetId);
     context.fromLabel  = srcNode?.label || link.sourceId;
     context.toLabel    = tgtNode?.label || link.targetId;
-    // Inject numeric index and per-passage display mode flag for the template
-    context.passages = this._pendingPassages.map((p, i) => ({
-      ...p,
-      index: i,
-      displayModeIsPathOnly: (p.displayMode ?? "full") === "path-only"
-    }));
+    // Inject numeric index, per-passage display mode flag, and the direction/state axes
+    // (the two independent controls the row renders) for the template
+    context.passages = this._pendingPassages.map((p, i) => {
+      const { dirAxis, stateAxis } = decomposeDirection(p.direction ?? "both");
+      return {
+        ...p,
+        index: i,
+        displayModeIsPathOnly: (p.displayMode ?? "full") === "path-only",
+        dirAxis,
+        stateAxis
+      };
+    });
     // True when the link is already promoted to multi-passage (either by forceMulti or 2+ passages)
     context.isMulti = link.forceMulti === true || (link.passages?.length ?? 0) > 1;
     return context;
@@ -118,12 +124,22 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     });
 
-    // Direction cycle: both → forward → backward → locked → both (per row, independent)
+    // Direction axis: both → forward → backward → both (per row, independent)
     html.querySelectorAll(".ca-passage-direction").forEach(btn => {
       btn.addEventListener("click", () => {
         const i = parseInt(btn.closest("[data-index]").dataset.index, 10);
         const current = this._pendingPassages[i].direction ?? "both";
-        this._pendingPassages[i] = { ...this._pendingPassages[i], direction: PASSAGE_DIRECTION_CYCLE[current] ?? "both" };
+        this._pendingPassages[i] = { ...this._pendingPassages[i], direction: cycleLinkDirectionAxis(current) };
+        this.render({ force: true });
+      });
+    });
+
+    // State axis: open → blocked → locked → open (per row, independent)
+    html.querySelectorAll(".ca-passage-state").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.closest("[data-index]").dataset.index, 10);
+        const current = this._pendingPassages[i].direction ?? "both";
+        this._pendingPassages[i] = { ...this._pendingPassages[i], direction: cycleLinkStateAxis(current) };
         this.render({ force: true });
       });
     });
