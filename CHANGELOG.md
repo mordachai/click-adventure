@@ -1,3 +1,8 @@
+# 0.2.5
+
+## [Added]
+- **A link can now be blocked or locked in one direction only.** Block and Locked used to be all-or-nothing: a bidirectional link only. There was no way to give a one-way passage a secret or locked reverse side — a room bolted from the inside, or a secret door that's a plain doorway from the other side. Clicking a single-passage link now cycles through four extra combo states between Forward/Backward and Blocked/Locked: **Forward** (or **Backward**) **, other side blocked** and **Forward** (or **Backward**) **, other side locked**. The open side behaves exactly like a plain one-way link — visible and traversable by everyone; the closed side behaves exactly like Blocked (hidden from players, GM sees it as a secret passage and can still cross it) or Locked (visible to players with a lock icon, not traversable), but only from that side. On the Manager canvas, the link keeps its usual arrow for the open direction and gains a small secondary ✕/⊘ mark near the closed side's own end of the curve.
+
 # 0.2.4
 
 ## [Fixed]

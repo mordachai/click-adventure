@@ -9,7 +9,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { isMultiPassage, getEffectiveDirection, getGraphData, fireActiveItemMacro, fireNodeMacros, setNodeActiveImageIndex, setNodeActiveLinkedScene, getNodeActiveSceneId } from "./node-utils.js";
+import { isMultiPassage, getEffectiveDirection, getLinkStateFromSide, getGraphData, fireActiveItemMacro, fireNodeMacros, setNodeActiveImageIndex, setNodeActiveLinkedScene, getNodeActiveSceneId } from "./node-utils.js";
 import { shouldLockOnArrival, isUserLocked } from "./autolock-utils.js";
 import { openNodeJournal } from "./node-media.js";
 
@@ -137,16 +137,13 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
         }
       } else {
         const dir = getEffectiveDirection(link);
-        if (dir === "blocked") continue;
-        if (dir === "both") {
-          if ((link.sourceId === node.id && link.targetId === targetNodeId) ||
-              (link.targetId === node.id && link.sourceId === targetNodeId)) return true;
-        } else if (dir === "forward" && link.sourceId === node.id && link.targetId === targetNodeId) {
-          return true;
-        } else if (dir === "backward" && link.targetId === node.id && link.sourceId === targetNodeId) {
-          return true;
+        if (link.sourceId === node.id && link.targetId === targetNodeId) {
+          if (getLinkStateFromSide(dir, "source") === "open") return true;
+        } else if (link.targetId === node.id && link.sourceId === targetNodeId) {
+          if (getLinkStateFromSide(dir, "target") === "open") return true;
         }
-        // "locked" direction: link is visible but not navigable — NOT a valid back route
+        // "blocked"/"locked" (including the closed side of a one-way combo): the link is
+        // hidden or visible-but-not-navigable from this side — NOT a valid back route
       }
     }
     return false;
@@ -218,33 +215,25 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
         } else {
           // Single-passage: existing direction logic; dedup so the same node appears only once
           const dir = getEffectiveDirection(link);
-          // Non-GMs never see blocked links; GMs see them as "secret"
-          if (dir === "blocked" && !game.user.isGM) continue;
-          let otherId = null;
+          const side = link.sourceId === node.id ? "source" : (link.targetId === node.id ? "target" : null);
+          if (!side) continue;
+          const state = getLinkStateFromSide(dir, side);
+          // Non-GMs never see blocked links (or the blocked side of a one-way combo);
+          // GMs see them as "secret". "none" = closed side of a plain one-way link.
+          if (state === "none") continue;
+          if (state === "blocked" && !game.user.isGM) continue;
 
-          if (dir === "both") {
-            if (link.sourceId === node.id)      otherId = link.targetId;
-            else if (link.targetId === node.id) otherId = link.sourceId;
-          } else if (dir === "forward" && link.sourceId === node.id) {
-            otherId = link.targetId;
-          } else if (dir === "backward" && link.targetId === node.id) {
-            otherId = link.sourceId;
-          } else if (dir === "locked") {
-            // Visible in HUD but not navigable — resolve otherId normally
-            if (link.sourceId === node.id)      otherId = link.targetId;
-            else if (link.targetId === node.id) otherId = link.sourceId;
-          } else if (dir === "blocked") {
-            // Only reached by GM — shown as secret (purple + mask icon), fully navigable
-            if (link.sourceId === node.id)      otherId = link.targetId;
-            else if (link.targetId === node.id) otherId = link.sourceId;
-          }
-
-          if (!otherId) continue;
+          const otherId = side === "source" ? link.targetId : link.sourceId;
           const other = nodes.find(n => n.id === otherId);
           if (other && !seen.has(other.id)) {
             seen.add(other.id);
             const navName = other.label || game.scenes.get(other.sceneId)?.name || other.id;
-            availableDestinations.push({ id: other.id, label: navName, locked: dir === "locked", secret: dir === "blocked" });
+            availableDestinations.push({
+              id:     other.id,
+              label:  navName,
+              locked: state === "locked",
+              secret: state === "blocked"
+            });
           }
         }
       }

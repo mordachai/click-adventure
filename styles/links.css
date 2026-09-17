@@ -10,6 +10,7 @@
      .ca-link.ca-link--hover                      Hover highlight (toggled via JS classList)
      .ca-link[data-direction="both"]              Bidirectional (open) — green
      .ca-link[data-direction="forward"|"backward"]   One-way — amber
+     .ca-link[data-direction="*-blocked"|"*-locked"] One-way, other side blocked/locked — amber, dashed
      .ca-link[data-direction="blocked"]           Blocked — purple, dashed
      .ca-link[data-direction="locked"]            Locked — red, dashed
      .ca-link[data-multi="true"]                  Multi-passage link — thicker, purple
@@ -18,6 +19,7 @@
      .ca-temp-link                                Dashed amber preview while user drags from anchor
      .ca-link-direction                           Text indicator at path midpoint (eg. "↔" or "✕")
      .ca-link-direction[data-direction="..."]    Per-state fill colors for the indicator
+     .ca-link-direction--secondary                Smaller closed-side glyph on a one-way block/lock combo
      .ca-link-direction-arrow                     Polygon arrow used for forward/backward states
 */
 
@@ -96,6 +98,22 @@
 .click-adventure.manager .ca-link[data-direction="locked"] {
   stroke: var(--ca-state-locked);
   stroke-dasharray: 6 4;
+}
+
+/* One-way link whose closed side is blocked or locked instead of simply absent —
+   amber like a plain one-way link, dashed to flag that the other side isn't. */
+.click-adventure.manager .ca-link[data-direction="forward-blocked"],
+.click-adventure.manager .ca-link[data-direction="backward-blocked"],
+.click-adventure.manager .ca-link[data-direction="forward-locked"],
+.click-adventure.manager .ca-link[data-direction="backward-locked"] {
+  stroke: var(--ca-state-directional);
+  stroke-dasharray: 10 3;
+}
+
+/* Secondary closed-side glyph on a one-way block/lock combo — smaller than the primary
+   direction indicator so the open-direction arrow stays the dominant read of the link. */
+.click-adventure.manager .ca-link-direction--secondary {
+  font-size: 10px;
 }
 
 /* Multi-passage link visual. */

@@ -15,7 +15,7 @@
 
 import { InstructionsApp } from "./instructions-app.js";
 import { SettingsApp } from "./settings-app.js";
-import { getNodeActiveImage, getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection } from "./node-utils.js";
+import { getNodeActiveImage, getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, getLinkStateFromSide } from "./node-utils.js";
 
 const _VIDEO_EXT = new Set(["webm", "mp4"]);
 /** @param {string} src @returns {boolean} */
@@ -214,17 +214,10 @@ export class ManagerApp extends HandlebarsApplicationMixin(ApplicationV2) {
         }
       } else {
         const dir = getEffectiveDirection(link);
-        if (dir === "blocked" || dir === "locked") continue;
-        let otherId = null;
-        if (dir === "both") {
-          if (link.sourceId === gmNodeId)      otherId = link.targetId;
-          else if (link.targetId === gmNodeId) otherId = link.sourceId;
-        } else if (dir === "forward" && link.sourceId === gmNodeId) {
-          otherId = link.targetId;
-        } else if (dir === "backward" && link.targetId === gmNodeId) {
-          otherId = link.sourceId;
-        }
-        if (!otherId || seen.has(otherId)) continue;
+        const side = link.sourceId === gmNodeId ? "source" : (link.targetId === gmNodeId ? "target" : null);
+        if (!side || getLinkStateFromSide(dir, side) !== "open") continue;
+        const otherId = side === "source" ? link.targetId : link.sourceId;
+        if (seen.has(otherId)) continue;
         const other = nodes.find(n => n.id === otherId);
         if (!other) continue;
         seen.add(otherId);

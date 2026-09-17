@@ -132,7 +132,14 @@
       <li><strong class="ca-swatch ca-swatch--blocked">✕ Blocked</strong> — purple — hidden from players; cannot be traversed</li>
       <li><strong class="ca-swatch ca-swatch--locked">⊘ Locked</strong> — red — visible to players but not traversable (hints at a locked passage)</li>
     </ul>
-    <p>Clicking a single-passage link cycles through them in order: Both → Forward → Backward → Blocked → Locked.</p>
+    <p>Clicking a single-passage link cycles through them in order: Both → Forward → Forward (other side blocked) → Forward (other side locked) → Backward → Backward (other side blocked) → Backward (other side locked) → Blocked → Locked.</p>
+
+    <h3>One-Way Block / Lock</h3>
+    <p>The four combo states in that cycle let one side of a link be bolted, blocked or secret while the other stays perfectly normal — a door barred from the inside, or a bookshelf that hides a passage on one side but is a plain doorway on the other. The open side behaves exactly like a plain Forward/Backward link: visible and traversable by everyone. The other side behaves exactly like Blocked or Locked, but only from that side:</p>
+    <ul>
+      <li><strong>Forward, other side blocked</strong> / <strong>Backward, other side blocked</strong> — the closed side is hidden from players; the GM sees it marked with a small <strong class="ca-swatch ca-swatch--blocked">✕</strong> as a secret passage and can still traverse it</li>
+      <li><strong>Forward, other side locked</strong> / <strong>Backward, other side locked</strong> — the closed side is visible to players (marked with a small <strong class="ca-swatch ca-swatch--locked">⊘</strong>) but not traversable from there</li>
+    </ul>
 
     <h3>Multi-Passage Links</h3>
     <p><kbd>Shift</kbd> + click any link to open the passage editor and add multiple named passages between two nodes. Each passage has its own direction rule. Multi-passage links appear <strong class="ca-swatch ca-swatch--blocked">purple</strong> with a thicker line and a ⊕ marker.</p>

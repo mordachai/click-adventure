@@ -7,7 +7,7 @@
  */
 
 import { LinkEditorApp } from "./link-editor-app.js";
-import { getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, DIRECTION_CYCLE } from "./node-utils.js";
+import { getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, DIRECTION_CYCLE, splitOneWayState } from "./node-utils.js";
 
 /**
  * Fixed node dimensions — must match CSS --ca-node-size.
@@ -80,17 +80,20 @@ export function anchorPoint(nodeEl, side, wsRect, pan, zoom = 1) {
 }
 
 /**
- * Returns the approximate midpoint of a cubic Bézier curve (t=0.5) using De Casteljau.
+ * Returns a point along a cubic Bézier curve at parameter t (0 = start, 1 = end) using
+ * De Casteljau. Defaults to t=0.5, the midpoint, used for the primary direction glyph;
+ * one-way block/lock combos also place a secondary indicator near t=0.2/0.8 — close to
+ * whichever endpoint is on the closed side.
  * @param {{ x: number, y: number }} p1
  * @param {{ dx: number, dy: number }} c1
  * @param {{ x: number, y: number }} p2
  * @param {{ dx: number, dy: number }} c2
+ * @param {number} [t=0.5]
  * @returns {{ x: number, y: number }}
  */
-export function pathMidpoint(p1, c1, p2, c2) {
+export function pathMidpoint(p1, c1, p2, c2, t = 0.5) {
   const cp1 = { x: p1.x + c1.dx, y: p1.y + c1.dy };
   const cp2 = { x: p2.x + c2.dx, y: p2.y + c2.dy };
-  const t = 0.5;
   const x = Math.pow(1-t,3)*p1.x + 3*Math.pow(1-t,2)*t*cp1.x + 3*(1-t)*t*t*cp2.x + Math.pow(t,3)*p2.x;
   const y = Math.pow(1-t,3)*p1.y + 3*Math.pow(1-t,2)*t*cp1.y + 3*(1-t)*t*t*cp2.y + Math.pow(t,3)*p2.y;
   return { x, y };
@@ -230,17 +233,37 @@ export function renderLinks(app) {
       indicator.textContent = direction === "both" ? "⟷" : direction === "blocked" ? "✕" : "⊘";
       svg.appendChild(indicator);
     } else {
-      // Arrowhead aligned with the curve tangent at t=0.5
+      const oneWay = splitOneWayState(direction);
+      // Arrowhead aligned with the curve tangent at t=0.5, pointing along the open side
+      // (the combo's own open side for a one-way block/lock combo, otherwise `direction` itself).
+      const openSide = oneWay?.openSide ?? direction;
       const angle = pathTangentAngle(p1, c1, p2, c2);
-      const arrowAngle = direction === "forward" ? angle : angle + 180;
+      const arrowAngle = openSide === "forward" ? angle : angle + 180;
       const arrow = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
       arrow.classList.add("ca-link-direction-arrow");
-      arrow.dataset.direction = direction;
+      arrow.dataset.direction = openSide;
       // Tip at (8,0), base corners at (-6,-5) and (-6,5) — points right by default
       arrow.setAttribute("points", "8,0 -6,-5 -6,5");
       arrow.setAttribute("transform", `translate(${mid.x}, ${mid.y}) rotate(${arrowAngle})`);
       arrow.style.pointerEvents = "none";
       svg.appendChild(arrow);
+
+      if (oneWay) {
+        // Secondary glyph near the closed side's own endpoint (t=0.2 for a closed source,
+        // t=0.8 for a closed target) so the GM can see at a glance which side is restricted.
+        const closedT = oneWay.openSide === "forward" ? 0.8 : 0.2;
+        const closedPoint = pathMidpoint(p1, c1, p2, c2, closedT);
+        const closedIndicator = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        closedIndicator.classList.add("ca-link-direction", "ca-link-direction--secondary");
+        closedIndicator.setAttribute("x", closedPoint.x);
+        closedIndicator.setAttribute("y", closedPoint.y);
+        closedIndicator.setAttribute("text-anchor", "middle");
+        closedIndicator.setAttribute("dominant-baseline", "central");
+        closedIndicator.dataset.direction = oneWay.closedState;
+        closedIndicator.style.pointerEvents = "none";
+        closedIndicator.textContent = oneWay.closedState === "blocked" ? "✕" : "⊘";
+        svg.appendChild(closedIndicator);
+      }
     }
   }
 }

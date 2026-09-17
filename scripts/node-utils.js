@@ -146,27 +146,89 @@ export async function setNodeActiveLinkedScene(nodeId, linkedSceneId) {
 /**
  * Ordered direction cycle used when the GM clicks a link to change its traversal mode.
  * Each key is the current state; the value is the next state in the cycle.
- * All 5 states are persisted in the graph data — none is display-only.
+ * All 9 states are persisted in the graph data — none is display-only.
  *
  * State reference:
- *   "both"     — Bidirectional. Players on either side see the link and can traverse it.
- *   "forward"  — One-way: source → target only. Players on the target side do not see it.
- *   "backward" — One-way: target → source only. Players on the source side do not see it.
- *   "blocked"  — Completely hidden. Does not appear in the HUD for anyone. Useful for
- *                temporarily disabling a connection without deleting it.
- *   "locked"   — Visible in the HUD (shown with a lock icon ⊘) but not navigable.
- *                Players can see the destination but clicking it does nothing.
- *                Useful for hinting at a passage that hasn't been unlocked yet.
+ *   "both"             — Bidirectional. Players on either side see the link and can traverse it.
+ *   "forward"          — One-way: source → target only. Players on the target side do not see it.
+ *   "backward"         — One-way: target → source only. Players on the source side do not see it.
+ *   "forward-blocked"  — Source → target is open and visible to everyone. Target → source is
+ *                        completely hidden from players; the GM sees it as a secret passage.
+ *   "backward-blocked" — Target → source is open and visible to everyone. Source → target is
+ *                        completely hidden from players; the GM sees it as a secret passage.
+ *   "forward-locked"   — Source → target is open and visible to everyone. Target → source is
+ *                        visible (lock icon ⊘) but not navigable.
+ *   "backward-locked"  — Target → source is open and visible to everyone. Source → target is
+ *                        visible (lock icon ⊘) but not navigable.
+ *   "blocked"          — Completely hidden on both sides. Does not appear in the HUD for
+ *                        anyone. Useful for temporarily disabling a connection without
+ *                        deleting it.
+ *   "locked"           — Visible on both sides (lock icon ⊘) but not navigable from either.
+ *                        Players can see the destination but clicking it does nothing.
+ *                        Useful for hinting at a passage that hasn't been unlocked yet.
+ *
+ * The four "-blocked"/"-locked" combos let a passage be bolted, blocked or secret from one
+ * side while remaining perfectly normal from the other — e.g. a door barred from the inside,
+ * or a bookshelf that hides a passage on one side but is a plain doorway on the other.
  *
  * @type {Readonly<Record<string, string>>}
  */
 export const DIRECTION_CYCLE = Object.freeze({
-  both:     "forward",   // free → one-way forward
-  forward:  "backward",  // one-way forward → one-way backward
-  backward: "blocked",   // one-way backward → completely hidden
-  blocked:  "locked",    // hidden → visible but not navigable
-  locked:   "both",      // locked → free (cycle restarts)
+  both:                "forward",            // free → one-way forward
+  forward:             "forward-blocked",    // one-way forward → forward open, backward secret
+  "forward-blocked":   "forward-locked",     // forward open, backward secret → backward locked
+  "forward-locked":    "backward",           // forward open, backward locked → one-way backward
+  backward:            "backward-blocked",   // one-way backward → backward open, forward secret
+  "backward-blocked":  "backward-locked",    // backward open, forward secret → forward locked
+  "backward-locked":   "blocked",            // backward open, forward locked → completely hidden
+  blocked:             "locked",             // hidden → visible but not navigable
+  locked:              "both",               // locked → free (cycle restarts)
 });
+
+/**
+ * Resolves how a link may be traversed from one specific side, given its effective
+ * direction. Single choke point for the 5 legacy states plus the 4 one-way block/lock
+ * combos in {@link DIRECTION_CYCLE} — every consumer that gates or labels a destination
+ * (the HUD, the "navigate back" check, the Visual Polls integration) goes through this
+ * instead of re-deriving the combo logic itself.
+ *
+ * @param {string} direction - value from getEffectiveDirection(link)
+ * @param {"source"|"target"} side - which side of the link this query is "from"
+ * @returns {"open"|"locked"|"blocked"|"none"} "none" = no route from this side at all
+ *   (the closed side of a plain one-way forward/backward link)
+ */
+export function getLinkStateFromSide(direction, side) {
+  switch (direction) {
+    case "both":     return "open";
+    case "blocked":  return "blocked";
+    case "locked":   return "locked";
+    case "forward":  return side === "source" ? "open" : "none";
+    case "backward": return side === "target" ? "open" : "none";
+    case "forward-blocked":  return side === "source" ? "open" : "blocked";
+    case "backward-blocked": return side === "target" ? "open" : "blocked";
+    case "forward-locked":   return side === "source" ? "open" : "locked";
+    case "backward-locked":  return side === "target" ? "open" : "locked";
+    default: return "none";
+  }
+}
+
+/**
+ * Splits a one-way block/lock combo direction into its open side and the state of the
+ * closed side, for rendering (arrow direction + secondary indicator glyph). Returns null
+ * for every other direction value (both/forward/backward/blocked/locked/peek).
+ *
+ * @param {string} direction
+ * @returns {{openSide: "forward"|"backward", closedState: "blocked"|"locked"}|null}
+ */
+export function splitOneWayState(direction) {
+  switch (direction) {
+    case "forward-blocked":  return { openSide: "forward",  closedState: "blocked" };
+    case "backward-blocked": return { openSide: "backward", closedState: "blocked" };
+    case "forward-locked":   return { openSide: "forward",  closedState: "locked"  };
+    case "backward-locked":  return { openSide: "backward", closedState: "locked"  };
+    default: return null;
+  }
+}
 
 /** Cycle used for individual passages inside a multi-passage link. "blocked" is excluded
  *  because the "✕ Remove passage" button already serves that purpose more clearly.
