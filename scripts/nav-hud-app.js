@@ -171,15 +171,24 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
         if (link.type === "peek") continue;
         if (isMultiPassage(link)) {
           // Each passage is listed as its own destination button (no dedup — distinct traversal options)
-          for (const passage of link.passages) {
-            const passDir = passage.direction ?? "both";
-            const side = link.sourceId === node.id ? "source" : (link.targetId === node.id ? "target" : null);
-            if (!side) continue;
-            const state = getLinkStateFromSide(passDir, side);
+          const side = link.sourceId === node.id ? "source" : (link.targetId === node.id ? "target" : null);
+          if (!side) continue;
+          // All passages of one link share the same two endpoints, so from a given side a
+          // Blocked passage is always a dead route to the exact same destination a working
+          // (open/custom) passage on this link already lists — a locked door standing right
+          // next to one that works isn't useful information, just a disabled duplicate row.
+          // Players don't get shown it in that case; the GM still sees every passage.
+          const passageStates = link.passages.map(p => getLinkStateFromSide(p.direction ?? "both", side));
+          const hasWorkingAlternative = passageStates.some(s => s === "open" || s === "custom");
+
+          for (let pIdx = 0; pIdx < link.passages.length; pIdx++) {
+            const passage = link.passages[pIdx];
+            const state = passageStates[pIdx];
             // Non-GMs never see the secret side of a passage; GMs see it marked as secret.
             // "none" = closed side of a plain one-way passage.
             if (state === "none") continue;
             if (state === "secret" && !game.user.isGM) continue;
+            if (state === "blocked" && hasWorkingAlternative && !game.user.isGM) continue;
 
             const otherId = side === "source" ? link.targetId : link.sourceId;
             const other = nodes.find(n => n.id === otherId);

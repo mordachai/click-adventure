@@ -1,3 +1,8 @@
+# 0.2.11
+
+## [Changed]
+- **Players no longer see a dead-end Blocked passage next to a working one.** On a multi-passage link, if one passage is Blocked from the side the player is standing on but another passage on that same link already offers an open (or Custom) route to the same destination, the Blocked one is no longer listed — it was just a disabled duplicate row for a door that leads nowhere useful from there. GMs still see every passage, always.
+
 # 0.2.10
 
 ## [Fixed]
