@@ -1,3 +1,8 @@
+# 0.2.4
+
+## [Fixed]
+- **Linked Scenes now remember the last one you picked.** The Node Configuration "Set Default" star only ever tracked the choice in memory — closing the window, or simply navigating away and back through the HUD, silently reverted to the node's original scene. The HUD's own linked-scene switcher had the same gap: it changed what was shown but never saved the choice. Picking a linked scene — from either place — now persists on the node, the same way picking an image already did, and the HUD switcher shows a star on whichever one is currently active.
+
 # 0.2.3
 
 ## [Added]

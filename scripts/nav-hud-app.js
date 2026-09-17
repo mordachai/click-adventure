@@ -9,7 +9,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { isMultiPassage, getEffectiveDirection, getGraphData, fireActiveItemMacro, fireNodeMacros, setNodeActiveImageIndex } from "./node-utils.js";
+import { isMultiPassage, getEffectiveDirection, getGraphData, fireActiveItemMacro, fireNodeMacros, setNodeActiveImageIndex, setNodeActiveLinkedScene, getNodeActiveSceneId } from "./node-utils.js";
 import { shouldLockOnArrival, isUserLocked } from "./autolock-utils.js";
 import { openNodeJournal } from "./node-media.js";
 
@@ -364,6 +364,8 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const images         = Array.isArray(currentNode?.images) ? currentNode.images : [];
       const linkedScenes   = Array.isArray(currentNode?.linkedScenes) ? currentNode.linkedScenes : [];
       const activeIdx      = currentNode?.activeImageIndex ?? 0;
+      const activeLinkedId = currentNode?.activeLinkedSceneId ?? null;
+      const linkedSceneInUse = activeLinkedId !== null;
 
       context.nodeImages = images.map((img, i) => {
         const src = img.src ?? null;
@@ -372,7 +374,7 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           label:    img.label || `Image ${i + 1}`,
           src,
           isVideo:  src ? /\.(webm|mp4|ogg|ogv|mov)$/i.test(src) : false,
-          isActive: i === activeIdx
+          isActive: !linkedSceneInUse && i === activeIdx
         };
       });
       context.nodeLinkedScenes = linkedScenes.map((ls, i) => {
@@ -381,7 +383,8 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           index:      i,
           sceneId:    ls.sceneId,
           label:      ls.label || scene?.name || `Scene ${i + 1}`,
-          previewSrc: scene?.thumbnail ?? null
+          previewSrc: scene?.thumbnail ?? null,
+          isActive:   ls.id === activeLinkedId
         };
       });
       context.hasNodeSwitcher = images.length > 1 || (images.length > 0 && linkedScenes.length > 0);
@@ -577,6 +580,19 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
         const node = this._currentNode();
         if (!node) return;
         await setNodeActiveImageIndex(node.id, idx);
+
+        // A linked scene may currently be shown instead of the node's own scene —
+        // bring the canvas back now that an image was picked.
+        if (node.sceneId) {
+          const scene = game.scenes.get(node.sceneId);
+          if (scene) await scene.view();
+          for (const user of game.users) {
+            if (user.isGM || !user.active) continue;
+            if (user.getFlag("click-adventure", "currentNodeId") !== node.id) continue;
+            await globalThis.ClickAdventure._socket.viewSceneForUser(node.sceneId, user.id);
+          }
+        }
+
         this.render({ force: true });
       });
     });
@@ -591,18 +607,24 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           return;
         }
         const node = this._currentNode();
+        if (!node) return;
+
+        // Persist so navigating away and back shows this linked scene again, instead
+        // of always reverting to the node's own scene.
+        const entry = node.linkedScenes?.find(ls => ls.sceneId === sceneId);
+        await setNodeActiveLinkedScene(node.id, entry?.id ?? null);
 
         // GM: switch view locally
         await scene.view();
 
         // Players on this node: send via socket
-        if (node) {
-          for (const user of game.users) {
-            if (user.isGM || !user.active) continue;
-            if (user.getFlag("click-adventure", "currentNodeId") !== node.id) continue;
-            await globalThis.ClickAdventure._socket.viewSceneForUser(sceneId, user.id);
-          }
+        for (const user of game.users) {
+          if (user.isGM || !user.active) continue;
+          if (user.getFlag("click-adventure", "currentNodeId") !== node.id) continue;
+          await globalThis.ClickAdventure._socket.viewSceneForUser(sceneId, user.id);
         }
+
+        this.render({ force: true });
       });
     });
 
@@ -869,10 +891,14 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
     // ──────────────────────────────────────────────────────────────────
 
-    if (targetNode.sceneId) {
+    // The active linked scene (if any) takes precedence over the node's own scene —
+    // see getNodeActiveSceneId.
+    const activeSceneId = getNodeActiveSceneId(targetNode);
+
+    if (activeSceneId) {
       // Per-client scene view — does not affect other players' screens
       await globalThis.ClickAdventure._socket.viewSceneForUser(
-        targetNode.sceneId,
+        activeSceneId,
         game.userId
       );
     }
@@ -893,10 +919,10 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // ── Fire arrival macros ───────────────────────────────────────────────
     if (game.user.isGM) {
-      await fireActiveItemMacro(targetNode, "gm-view", targetNode.sceneId ?? null);
+      await fireActiveItemMacro(targetNode, "gm-view", activeSceneId);
       await fireNodeMacros(targetNode, "gm-view");
     } else {
-      await fireActiveItemMacro(targetNode, "player-view", targetNode.sceneId ?? null);
+      await fireActiveItemMacro(targetNode, "player-view", activeSceneId);
       await fireNodeMacros(targetNode, "player-view");
     }
     // Arriving is a scene view for whoever navigated, GM or player alike.
@@ -905,8 +931,8 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // Request GM to move this player's token between scenes.
     if (!game.user.isGM) {
-      const fromSceneId = currentNode?.sceneId ?? null;
-      const toSceneId   = targetNode.sceneId   ?? null;
+      const fromSceneId = getNodeActiveSceneId(currentNode);
+      const toSceneId   = activeSceneId;
       if (toSceneId) {
         globalThis.ClickAdventure._socket.emitMoveToken({
           userId:      game.userId,
@@ -920,14 +946,14 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (game.user.isGM && game.settings.get("click-adventure", "gmNavigationMode") === "guide") {
       const guideModeAction = game.settings.get("click-adventure", "guideModeAction");
 
-      if (guideModeAction === "activate" && targetNode.sceneId) {
+      if (guideModeAction === "activate" && activeSceneId) {
         // Activate the scene globally — Foundry handles view for all connected users.
         // No per-player socket messages needed; scene.activate() is GM-only and
         // triggers canvasReady on all clients automatically.
-        const scene = game.scenes.get(targetNode.sceneId);
+        const scene = game.scenes.get(activeSceneId);
         if (scene) await scene.activate();
 
-        await fireActiveItemMacro(targetNode, "gm-activate", targetNode.sceneId ?? null);
+        await fireActiveItemMacro(targetNode, "gm-activate", activeSceneId);
         await fireNodeMacros(targetNode, "gm-activate");
         await openNodeJournal(targetNode, "activate");
         globalThis.ClickAdventure._socket.emitOpenJournal(targetNode.id);
@@ -939,7 +965,7 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           // Capture origin BEFORE overwriting the flag.
           const fromNodeId  = user.getFlag("click-adventure", "currentNodeId") ?? null;
           const fromNode    = guideNodes.find(n => n.id === fromNodeId);
-          const fromSceneId = fromNode?.sceneId ?? null;
+          const fromSceneId = getNodeActiveSceneId(fromNode);
 
           await user.unsetFlag("click-adventure", "previousNodeId");
           await user.setFlag("click-adventure", "currentNodeId", targetNode.id);
@@ -948,7 +974,7 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           await globalThis.ClickAdventure._socket._handleMoveToken({
             userId: user.id,
             fromSceneId,
-            toSceneId: targetNode.sceneId
+            toSceneId: activeSceneId
           });
         }
 
@@ -960,19 +986,19 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           // Capture origin BEFORE overwriting the flag.
           const fromNodeId  = user.getFlag("click-adventure", "currentNodeId") ?? null;
           const fromNode    = nodes.find(n => n.id === fromNodeId);
-          const fromSceneId = fromNode?.sceneId ?? null;
+          const fromSceneId = getNodeActiveSceneId(fromNode);
 
           await user.unsetFlag("click-adventure", "previousNodeId");
           await user.setFlag("click-adventure", "currentNodeId", targetNode.id);
 
-          if (targetNode.sceneId) {
-            globalThis.ClickAdventure._socket.teleportUser(targetNode.sceneId, user.id, targetNode.id);
+          if (activeSceneId) {
+            globalThis.ClickAdventure._socket.teleportUser(activeSceneId, user.id, targetNode.id);
             // GM is already the executor — call the handler directly instead of emitting
             // to self (socket.io does not echo to the emitter).
             await globalThis.ClickAdventure._socket._handleMoveToken({
               userId:     user.id,
               fromSceneId,
-              toSceneId:  targetNode.sceneId
+              toSceneId:  activeSceneId
             });
           } else {
             globalThis.ClickAdventure._socket.notifyHudRefresh(user.id);

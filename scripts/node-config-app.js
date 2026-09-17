@@ -8,7 +8,7 @@
  * Lifecycle hook: renderNodeConfigApp
  */
 
-import { syncNodeTile, getGraphData, saveGraphData, fireNodeMacros } from "./node-utils.js";
+import { syncNodeTile, getGraphData, saveGraphData, fireNodeMacros, setNodeActiveLinkedScene } from "./node-utils.js";
 import {
   getNodeJournal, getNodeMusic, setNodeJournal, setNodeMusic,
   buildJournalTriggerOptions, DEFAULT_JOURNAL_TRIGGER, getNodeScene
@@ -217,8 +217,13 @@ export class NodeConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this._pendingStartNode = null;
     /** @type {Array<{id:string, sceneId:string, label:string}>|null} */
     this._pendingLinkedScenes = null;
-    /** @type {string|null} ID da linked scene entry atualmente "em uso" (substitui o badge Active das imagens) */
-    this._activeLinkedSceneId = null;
+    /**
+     * Id of the linkedScenes[] entry currently in use (replaces the images' Active badge).
+     * undefined = not touched this session, fall back to the persisted node value;
+     * null = explicitly cleared (an image was picked instead); string = an explicit entry.
+     * @type {string|null|undefined}
+     */
+    this._activeLinkedSceneId = undefined;
     /** @type {string} Persists the active tab across force-renders */
     this._activeTab = "images";
     /** @type {Array<{id:string, macroId:string, trigger:string, executeMode:string, executedOnce:boolean}>|null} */
@@ -259,7 +264,10 @@ export class NodeConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
     context.node = node;
     context.nodeLabel = this._pendingLabel ?? node.label ?? "Scene";
     context.isStartNode = this._pendingStartNode ?? (startNodeId === this.nodeId);
-    const linkedSceneInUse = this._activeLinkedSceneId !== null;
+    const activeLinkedSceneId = this._activeLinkedSceneId !== undefined
+      ? this._activeLinkedSceneId
+      : (node.activeLinkedSceneId ?? null);
+    const linkedSceneInUse = activeLinkedSceneId !== null;
     context.images = workingImages.map((img, i) => ({
       ...img,
       index:          i,
@@ -277,7 +285,7 @@ export class NodeConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
       ...ls,
       index:          i,
       sceneName:      game.scenes.get(ls.sceneId)?.name ?? "(Scene not found)",
-      isActive:       ls.id === this._activeLinkedSceneId,
+      isActive:       ls.id === activeLinkedSceneId,
       hasMacro:       !!ls.macro,
       macroName:      ls.macro ? (game.macros.get(ls.macro.macroId)?.name ?? "(not found)") : null,
       triggerOptions: ls.macro ? buildTriggerOptions(ls.macro.trigger) : []
@@ -457,8 +465,10 @@ export class NodeConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
           return;
         }
 
-        // Mark this linked scene as active, clearing image active badge
+        // Mark this linked scene as active, clearing image active badge. Persisted
+        // immediately so navigating away and back shows this scene again.
         this._activeLinkedSceneId = entry.id;
+        await setNodeActiveLinkedScene(this.nodeId, entry.id);
         this.render({ force: true });
 
         // GM: switch view locally
@@ -978,7 +988,9 @@ export class NodeConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const images = this._getWorkingImages();
     const updatedNodes = nodes.map(n => {
       if (n.id !== this.nodeId) return n;
-      return { ...n, images, activeImageIndex: index };
+      // An image and a linked scene can't both be active — picking an image reverts
+      // the node to its own scene.
+      return { ...n, images, activeImageIndex: index, activeLinkedSceneId: null };
     });
     await saveGraphData({ sceneId, startNodeId, nodes: updatedNodes, links });
 

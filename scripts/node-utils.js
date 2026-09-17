@@ -100,11 +100,47 @@ export async function setNodeActiveImageIndex(nodeId, index) {
   const { sceneId, startNodeId, nodes, links } = getGraphData();
   const updatedNodes = nodes.map(n => {
     if (n.id !== nodeId) return n;
-    return { ...n, activeImageIndex: index };
+    // An image and a linked scene can't both be "active" at once — picking an image
+    // reverts the node to its own scene.
+    return { ...n, activeImageIndex: index, activeLinkedSceneId: null };
   });
   await saveGraphData({ sceneId, startNodeId, nodes: updatedNodes, links });
   const updatedNode = updatedNodes.find(n => n.id === nodeId);
   if (updatedNode) await syncNodeTile(updatedNode);
+}
+
+/**
+ * Resolves the id of the Foundry Scene a node currently shows: the linked scene marked
+ * active via setNodeActiveLinkedScene, falling back to the node's own scene. Unlike
+ * images (a texture swap within one scene), a linked scene is a whole separate Scene,
+ * so navigation needs to know which one is actually "current" for this node.
+ *
+ * @param {object} node
+ * @returns {string|null}
+ */
+export function getNodeActiveSceneId(node) {
+  if (!node) return null;
+  const active = node.linkedScenes?.find(ls => ls.id === node.activeLinkedSceneId);
+  return active?.sceneId ?? node.sceneId ?? null;
+}
+
+/**
+ * Persists which linked scene (or none) is currently active for a node, so navigating
+ * away and back shows the last one the GM picked instead of always reverting to the
+ * node's own scene. Mirrors setNodeActiveImageIndex.
+ *
+ * @param {string} nodeId
+ * @param {string|null} linkedSceneId - id of a linkedScenes[] entry, or null to revert
+ *   to the node's own scene
+ * @returns {Promise<void>}
+ */
+export async function setNodeActiveLinkedScene(nodeId, linkedSceneId) {
+  const { sceneId, startNodeId, nodes, links } = getGraphData();
+  const updatedNodes = nodes.map(n => {
+    if (n.id !== nodeId) return n;
+    return { ...n, activeLinkedSceneId: linkedSceneId };
+  });
+  await saveGraphData({ sceneId, startNodeId, nodes: updatedNodes, links });
 }
 
 /**

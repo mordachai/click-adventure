@@ -142,13 +142,13 @@
     <div class="ca-hud-ns-section-title">Linked Scenes</div>
     {{#each nodeLinkedScenes}}
     <button
-      class="ca-hud-ns-item"
+      class="ca-hud-ns-item {{#if isActive}}ca-hud-ns-item--active{{/if}}"
       data-action="switch-linked-scene"
       data-index="{{index}}"
       data-scene-id="{{sceneId}}"
       type="button"
     >
-      <span class="ca-hud-dest-text"><i class="fa-solid fa-map"></i> {{label}}</span>
+      <span class="ca-hud-dest-text">{{#if isActive}}<i class="fa-solid fa-star"></i>{{/if}} <i class="fa-solid fa-map"></i> {{label}}</span>
       {{#if previewSrc}}
       <span class="ca-hud-preview-eye" data-preview-src="{{previewSrc}}" data-is-video="false">
         <i class="fa-solid fa-eye"></i>

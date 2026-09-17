@@ -237,6 +237,7 @@ export class AdventureIOApp extends HandlebarsApplicationMixin(ApplicationV2) {
         sceneName: game.scenes.get(ls.sceneId)?.name ?? ls.label ?? null,
         macro:     ls.macro ? this._serializeMacroRef(ls.macro) : null
       })),
+      activeLinkedSceneId: node.activeLinkedSceneId ?? null,
       nodeMacros:       (node.nodeMacros ?? []).map(nm => ({
         ...nm,
         executedOnce: false,
