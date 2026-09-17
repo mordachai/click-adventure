@@ -7,7 +7,22 @@
  */
 
 import { LinkEditorApp } from "./link-editor-app.js";
-import { getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, cycleLinkDirectionAxis, cycleLinkStateAxis, splitOneWayState } from "./node-utils.js";
+import { getGraphData, saveGraphData, isMultiPassage, getEffectiveDirection, decomposeDirection, cycleLinkDirectionAxis, cycleLinkStateAxis, splitOneWayState } from "./node-utils.js";
+
+/**
+ * Unicode glyph for a link's state axis, used by both the both-sided indicator and the
+ * one-way combo's secondary closed-side indicator on the Manager canvas.
+ * @param {"blocked"|"secret"|"custom"} state
+ * @returns {string}
+ */
+function _stateGlyph(state) {
+  switch (state) {
+    case "blocked": return "⊘";
+    case "secret":  return "🎭";
+    case "custom":  return "🔑";
+    default:        return "?";
+  }
+}
 
 /**
  * Fixed node dimensions — must match CSS --ca-node-size.
@@ -225,16 +240,17 @@ export function renderLinks(app) {
       indicator.style.pointerEvents = "none";
       indicator.textContent = "⊕";
       svg.appendChild(indicator);
-    } else if (direction === "both" || direction === "blocked" || direction === "locked") {
+    } else if (decomposeDirection(direction).dirAxis === "both") {
+      const { stateAxis } = decomposeDirection(direction);
       const indicator = document.createElementNS("http://www.w3.org/2000/svg", "text");
       indicator.classList.add("ca-link-direction");
       indicator.setAttribute("x", mid.x);
       indicator.setAttribute("y", mid.y);
       indicator.setAttribute("text-anchor", "middle");
       indicator.setAttribute("dominant-baseline", "central");
-      indicator.dataset.direction = direction;
+      indicator.dataset.direction = stateAxis === "open" ? "both" : stateAxis;
       indicator.style.pointerEvents = "none";
-      indicator.textContent = direction === "both" ? "⟷" : direction === "blocked" ? "✕" : "⊘";
+      indicator.textContent = stateAxis === "open" ? "⟷" : _stateGlyph(stateAxis);
       svg.appendChild(indicator);
     } else {
       const oneWay = splitOneWayState(direction);
@@ -265,7 +281,7 @@ export function renderLinks(app) {
         closedIndicator.setAttribute("dominant-baseline", "central");
         closedIndicator.dataset.direction = oneWay.closedState;
         closedIndicator.style.pointerEvents = "none";
-        closedIndicator.textContent = oneWay.closedState === "blocked" ? "✕" : "⊘";
+        closedIndicator.textContent = _stateGlyph(oneWay.closedState);
         svg.appendChild(closedIndicator);
       }
     }
@@ -283,10 +299,12 @@ export function renderLinks(app) {
  * @param {ManagerApp} app
  * @param {number} linkIndex
  * @param {(currentDir: string) => string} nextDirection
- * @returns {Promise<void>}
+ * @returns {Promise<string|null>} the link's new direction, or null if it was a no-op
+ *   (peek link, or multi-passage — cycled via LinkEditorApp instead)
  */
 async function _mutateLinkDirection(app, linkIndex, nextDirection) {
   const { sceneId, startNodeId, nodes, links } = getGraphData();
+  let result = null;
   const updatedLinks = links.map((l, i) => {
     if (i !== linkIndex) return l;
     // Peek links have no direction — cycling is a no-op
@@ -295,6 +313,7 @@ async function _mutateLinkDirection(app, linkIndex, nextDirection) {
     if (isMultiPassage(l)) return l;
     const currentDir = l.passages?.[0]?.direction ?? l.direction ?? "both";
     const newDir = nextDirection(currentDir);
+    result = newDir;
     const updatedPassages = l.passages
       ? [{ ...l.passages[0], direction: newDir }]
       : [{ label: "", direction: newDir }];
@@ -306,6 +325,8 @@ async function _mutateLinkDirection(app, linkIndex, nextDirection) {
   // Notify HUD immediately so destination list reflects the new link state
   const hud = globalThis.ClickAdventure._hud;
   if (hud?.rendered) hud.render({ force: true });
+
+  return result;
 }
 
 /**
@@ -320,15 +341,19 @@ export async function onCycleLink(app, linkIndex) {
 }
 
 /**
- * Cycles a link's state axis: open → blocked → locked → open. The direction axis
+ * Cycles a link's state axis: open → blocked → secret → custom → open. The direction axis
  * (both/forward/backward) is preserved. Triggered by a Ctrl/Cmd+click on a .ca-link-hit
- * element.
+ * element. Landing on "custom" opens the Passage Editor immediately, since that's the only
+ * place a passage's keys can be configured — canvas clicking alone can't drag a key onto it.
  * @param {ManagerApp} app
  * @param {number} linkIndex
  * @returns {Promise<void>}
  */
 export async function onCycleLinkState(app, linkIndex) {
-  await _mutateLinkDirection(app, linkIndex, cycleLinkStateAxis);
+  const newDirection = await _mutateLinkDirection(app, linkIndex, cycleLinkStateAxis);
+  if (newDirection && decomposeDirection(newDirection).stateAxis === "custom") {
+    new LinkEditorApp(linkIndex).render(true);
+  }
 }
 
 /**

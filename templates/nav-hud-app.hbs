@@ -31,15 +31,19 @@
   {{#if hasAnyDirection}}
   <div class="ca-hud-destinations {{#if isOpen}}ca-hud-destinations--open{{/if}}">
     {{#each availableDestinations}}
-    <button class="ca-hud-dest-btn {{#if secret}}ca-hud-dest-btn--secret{{/if}} {{#if locked}}ca-hud-dest-btn--locked{{/if}} {{#if autolocked}}ca-hud-dest-btn--autolocked{{/if}} {{#if isOrigin}}ca-hud-dest-btn--origin{{/if}}"
+    <button class="ca-hud-dest-btn {{#if secret}}ca-hud-dest-btn--secret{{/if}} {{#if blocked}}ca-hud-dest-btn--blocked{{/if}} {{#if custom}}ca-hud-dest-btn--custom{{/if}} {{#if autolocked}}ca-hud-dest-btn--autolocked{{/if}} {{#if isOrigin}}ca-hud-dest-btn--origin{{/if}}"
             data-node-id="{{id}}"
-            data-locked="{{#if locked}}true{{else}}false{{/if}}"
+            data-dest-index="{{index}}"
+            data-blocked="{{#if blocked}}true{{else}}false{{/if}}"
             data-autolocked="{{#if autolocked}}true{{else}}false{{/if}}"
             data-secret="{{#if secret}}true{{else}}false{{/if}}"
+            data-custom="{{#if custom}}true{{else}}false{{/if}}"
             type="button">
       <span class="ca-hud-dest-text">
         <span class="ca-hud-dest-name">
           {{#if secret}}<i class="fa-solid fa-mask"></i>{{/if}}
+          {{#if blocked}}<i class="fa-solid fa-ban"></i>{{/if}}
+          {{#if custom}}<i class="fa-solid fa-key"></i>{{/if}}
           {{#if autolocked}}<i class="fa-solid fa-lock"></i>{{/if}}
           {{#if isOrigin}}<span class="ca-hud-origin-icon" title="You came from here">↩</span>{{/if}}{{label}}
         </span>

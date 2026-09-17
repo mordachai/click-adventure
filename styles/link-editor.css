@@ -8,12 +8,15 @@
 
 /* @section: link-editor
    @scope: .click-adventure.link-editor — the passage list between two nodes
-   @depends: _tokens.css, _components.css
+   @depends: _tokens.css, _components.css, --ca-state-custom
 
    @manifest:
      .ca-link-editor-header    The two node badges and the arrow between them
      .ca-node-badge            Pill showing a node name
-     .ca-passage-row           label input + display-mode + direction + remove
+     .ca-passage-row           Card wrapping the main row and, when state is Custom, the keys panel
+     .ca-passage-row-main      label input + display-mode + direction + state + remove
+     .ca-passage-keys          Keys panel shown only when a passage's state is Custom
+     .ca-passage-key-chip      One dropped key (item/actor/macro/scene)
      .ca-link-editor-footer    Add / Convert on the left, Save on the right
 */
 
@@ -72,9 +75,15 @@
 
 .click-adventure.link-editor .ca-passage-row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--ca-space-2);
   padding: var(--ca-space-2);
+}
+
+.click-adventure.link-editor .ca-passage-row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--ca-space-2);
 }
 
 .click-adventure.link-editor .ca-passage-label {
@@ -96,6 +105,66 @@
    is already last, and the auto margin would tear it away from its siblings. */
 .click-adventure.link-editor .ca-passage-remove {
   margin-left: 0;
+}
+
+/* ── Custom-state keys panel ──────────────────────────────────────────── */
+.click-adventure.link-editor .ca-passage-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-space-2);
+  padding: var(--ca-space-2);
+  border-radius: var(--ca-radius-md);
+  background: var(--ca-border-faint);
+  border: 1px solid var(--ca-border);
+}
+
+.click-adventure.link-editor .ca-passage-keys-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.click-adventure.link-editor .ca-passage-key-mode {
+  color: var(--ca-state-custom);
+  border-color: var(--ca-state-custom);
+  min-width: 44px;
+}
+
+.click-adventure.link-editor .ca-passage-key-dropzone {
+  padding: var(--ca-space-2);
+  font-size: var(--ca-fs-label);
+}
+
+.click-adventure.link-editor .ca-passage-key-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ca-space-2);
+}
+
+.click-adventure.link-editor .ca-passage-key-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--ca-space-1);
+  padding: 3px var(--ca-space-2);
+  border-radius: var(--ca-radius-pill);
+  background: var(--ca-bg-input);
+  border: 1px solid var(--ca-border);
+  font-size: var(--ca-fs-label);
+  max-width: 220px;
+}
+
+.click-adventure.link-editor .ca-passage-key-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.click-adventure.link-editor .ca-passage-key-remove {
+  min-width: 0;
+  padding: 0 4px;
 }
 
 .click-adventure.link-editor .ca-link-editor-footer {

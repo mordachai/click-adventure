@@ -1,3 +1,12 @@
+# 0.2.7
+
+## [Added]
+- **A link's state can now be "Custom" — traversable only once the player has a key.** The state cycle (canvas Ctrl/Cmd+click, or the Passage Editor's state button) is now Open → Blocked → Secret → Custom → Open. Landing on Custom opens the Passage Editor, where the passage grows a keys panel: drag an **Item** (the player's character must own it), an **Actor** (the player's character must be it), a **Macro** (run and must return `true`), or a **Scene** (the player must have personally visited it before) onto it. An **AND / OR** toggle in the panel decides whether every key is required or just one. The check runs when a player clicks the destination — never just from having the HUD open — so a Macro key's side effects only ever fire on an actual attempt to pass. The GM always bypasses the check. An empty key list behaves like Open, so picking Custom never soft-locks a passage before it's configured.
+- Per-player "visited scene" tracking, recorded automatically every time a player arrives at a node — the data behind the Scene key above. Every code path that moves a player (HUD navigation, guide mode, gated-mode approval, GM teleport/send-to-node) now goes through one shared function so this stays accurate everywhere.
+
+## [Changed]
+- **The two non-Open states are renamed and swapped to match their own behavior.** What was "Locked" (visible to players, not traversable) is now called **Blocked** — it kept its red ⊘ icon and its stored value, so no data changes. What was "Blocked" (hidden from players, GM-only) is now called **Secret** and shows a mask icon instead of ✕, since "blocked" reads more naturally as the visible-but-shut state than the hidden one. Existing worlds are unaffected: this is a naming and icon change in the UI, not a change to how any existing link already behaves.
+
 # 0.2.6
 
 ## [Changed]

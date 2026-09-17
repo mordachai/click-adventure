@@ -220,10 +220,18 @@ Hooks.on("init", () => {
     return icons[dirAxis] ?? "?";
   });
 
-  // Returns a Unicode glyph for a passage's state axis (open/blocked/locked).
+  // Returns a Unicode glyph for a passage's state axis (open/blocked/custom).
+  // "secret" has no glyph here — the template renders an actual fa-mask icon for it instead.
   Handlebars.registerHelper("caStateAxisIcon", stateAxis => {
-    const icons = { open: "•", blocked: "✕", locked: "⊘" };
+    const icons = { open: "O", blocked: "⊘", custom: "C" };
     return icons[stateAxis] ?? "?";
+  });
+
+  // Returns a Unicode/emoji icon for a key condition's type, used in the Passage Editor's
+  // custom-state key chips.
+  Handlebars.registerHelper("caKeyTypeIcon", type => {
+    const icons = { item: "🎒", actor: "👤", macro: "⚡", scene: "🗺️" };
+    return icons[type] ?? "?";
   });
 
   // Legacy single-graph setting — kept registered so existing data is never orphaned.

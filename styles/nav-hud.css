@@ -15,7 +15,9 @@
      .ca-hud-destinations--open                         Visible state (toggled via JS)
      .ca-hud-dest-btn                                   Single destination button
      .ca-hud-dest-name / .ca-hud-dest-sub               Node name over passage name
-     .ca-hud-dest-btn--locked                           Locked destination (red, not clickable)
+     .ca-hud-dest-btn--blocked                          Blocked destination (red, not clickable)
+     .ca-hud-dest-btn--secret                           Secret destination (purple, GM-only)
+     .ca-hud-dest-btn--custom                           Keyed destination (blue, checked on click)
      .ca-hud-orb                                        Circular hitbox containing the orb
      .ca-hud-orb--dragging                              Orb being dragged (cursor + pressed-in inner)
      .ca-hud-orb-inner                                  Visible glossy orb circle
@@ -172,20 +174,21 @@
   color: var(--ca-text-bright);
 }
 
-.click-adventure.nav-hud .ca-hud-dest-btn--locked {
+/* "blocked" state — visible to players (⊘ icon), not traversable */
+.click-adventure.nav-hud .ca-hud-dest-btn--blocked {
   opacity: 0.85;
   border-color: var(--ca-state-locked-border);
   color: var(--ca-text-locked);
   cursor: not-allowed;
 }
 
-.click-adventure.nav-hud .ca-hud-dest-btn--locked:hover {
+.click-adventure.nav-hud .ca-hud-dest-btn--blocked:hover {
   background: var(--ca-state-locked-tint);
   border-color: var(--ca-state-locked);
   color: var(--ca-text-locked-hv);
 }
 
-/* Secret destination — only shown to GM for "blocked" links */
+/* "secret" state — never shown to non-GMs; the GM sees it marked with a mask icon */
 .click-adventure.nav-hud .ca-hud-dest-btn--secret {
   border-color: var(--ca-state-blocked);
   color: var(--ca-state-multi-hover);
@@ -199,6 +202,22 @@
 .click-adventure.nav-hud .ca-hud-dest-btn--secret:hover {
   background: var(--ca-state-blocked-tint);
   border-color: var(--ca-state-multi-hover);
+  color: var(--ca-text-bright);
+}
+
+/* "custom" state — visible to everyone (key icon), traversability checked on click */
+.click-adventure.nav-hud .ca-hud-dest-btn--custom {
+  border-color: var(--ca-state-custom);
+  color: var(--ca-state-custom);
+}
+
+.click-adventure.nav-hud .ca-hud-dest-btn--custom i {
+  margin-right: 0.35em;
+}
+
+.click-adventure.nav-hud .ca-hud-dest-btn--custom:hover {
+  background: color-mix(in srgb, var(--ca-state-custom) 15%, transparent);
+  border-color: var(--ca-state-custom);
   color: var(--ca-text-bright);
 }
 

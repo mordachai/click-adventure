@@ -1,25 +1,31 @@
 /* @section: links
    @scope: SVG link layer between nodes — paths, hit areas, direction indicators
-   @depends: --ca-state-open, --ca-state-locked, --ca-state-blocked, --ca-state-multi*,
-             --ca-state-directional, --ca-state-link-base, --ca-state-link-hover,
-             --ca-state-temp, --ca-z-link
+   @depends: --ca-state-open, --ca-state-locked, --ca-state-blocked, --ca-state-custom,
+             --ca-state-multi*, --ca-state-directional, --ca-state-link-base,
+             --ca-state-link-hover, --ca-state-temp, --ca-z-link
+
+   A link's state axis is one of: open (no glyph of its own), blocked (⊘, red, visible to
+   players but not traversable), secret (🎭, purple, hidden from players — GM-only), or
+   custom (🔑, blue, visible to everyone but gated by key conditions). Combined with the
+   direction axis this gives 12 flat direction strings — see node-utils.js decomposeDirection.
 
    @manifest:
      .ca-links-layer                              SVG layer overlaid on the canvas (pointer-events: none)
      .ca-link                                     Visible link path
      .ca-link.ca-link--hover                      Hover highlight (toggled via JS classList)
-     .ca-link[data-direction="both"]              Bidirectional (open) — green
-     .ca-link[data-direction="forward"|"backward"]   One-way — amber
-     .ca-link[data-direction="*-blocked"|"*-locked"] One-way, other side blocked/locked — amber, dashed
-     .ca-link[data-direction="blocked"]           Blocked — purple, dashed
-     .ca-link[data-direction="locked"]            Locked — red, dashed
+     .ca-link[data-direction="both"]              Bidirectional, open — green
+     .ca-link[data-direction="forward"|"backward"]   One-way, open — amber
+     .ca-link[data-direction="blocked"]           Blocked (both sides) — red, dashed
+     .ca-link[data-direction="secret"]            Secret (both sides) — purple, dashed
+     .ca-link[data-direction="custom"]            Custom/keyed (both sides) — blue, dashed
+     .ca-link[data-direction="*-blocked"|"*-secret"|"*-custom"] One-way combo — amber, dashed
      .ca-link[data-multi="true"]                  Multi-passage link — thicker, purple
      .ca-link[data-multi="true"].ca-link--hover   Multi link hover state
      .ca-link-hit                                 Invisible wider hit-target for click handling
      .ca-temp-link                                Dashed amber preview while user drags from anchor
-     .ca-link-direction                           Text indicator at path midpoint (eg. "↔" or "✕")
+     .ca-link-direction                           Text indicator at path midpoint (eg. "↔" or "⊘")
      .ca-link-direction[data-direction="..."]    Per-state fill colors for the indicator
-     .ca-link-direction--secondary                Smaller closed-side glyph on a one-way block/lock combo
+     .ca-link-direction--secondary                Smaller closed-side glyph on a one-way combo
      .ca-link-direction-arrow                     Polygon arrow used for forward/backward states
 */
 
@@ -67,8 +73,9 @@
 }
 
 .click-adventure.manager .ca-link-direction[data-direction="both"]    { fill: var(--ca-state-open); }
-.click-adventure.manager .ca-link-direction[data-direction="blocked"] { fill: var(--ca-state-blocked); }
-.click-adventure.manager .ca-link-direction[data-direction="locked"]  { fill: var(--ca-state-locked); }
+.click-adventure.manager .ca-link-direction[data-direction="blocked"] { fill: var(--ca-state-locked); }
+.click-adventure.manager .ca-link-direction[data-direction="secret"]  { fill: var(--ca-state-blocked); }
+.click-adventure.manager .ca-link-direction[data-direction="custom"]  { fill: var(--ca-state-custom); }
 
 /* Directional arrow polygon. */
 .click-adventure.manager .ca-link-direction-arrow {
@@ -91,21 +98,28 @@
 }
 
 .click-adventure.manager .ca-link[data-direction="blocked"] {
-  stroke: var(--ca-state-blocked);
-  stroke-dasharray: 6 4;
-}
-
-.click-adventure.manager .ca-link[data-direction="locked"] {
   stroke: var(--ca-state-locked);
   stroke-dasharray: 6 4;
 }
 
-/* One-way link whose closed side is blocked or locked instead of simply absent —
+.click-adventure.manager .ca-link[data-direction="secret"] {
+  stroke: var(--ca-state-blocked);
+  stroke-dasharray: 6 4;
+}
+
+.click-adventure.manager .ca-link[data-direction="custom"] {
+  stroke: var(--ca-state-custom);
+  stroke-dasharray: 6 4;
+}
+
+/* One-way link whose closed side is blocked/secret/custom instead of simply absent —
    amber like a plain one-way link, dashed to flag that the other side isn't. */
 .click-adventure.manager .ca-link[data-direction="forward-blocked"],
 .click-adventure.manager .ca-link[data-direction="backward-blocked"],
-.click-adventure.manager .ca-link[data-direction="forward-locked"],
-.click-adventure.manager .ca-link[data-direction="backward-locked"] {
+.click-adventure.manager .ca-link[data-direction="forward-secret"],
+.click-adventure.manager .ca-link[data-direction="backward-secret"],
+.click-adventure.manager .ca-link[data-direction="forward-custom"],
+.click-adventure.manager .ca-link[data-direction="backward-custom"] {
   stroke: var(--ca-state-directional);
   stroke-dasharray: 10 3;
 }

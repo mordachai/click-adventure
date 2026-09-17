@@ -40,7 +40,7 @@ export function isMultiPassage(link) {
  * Falls back to the legacy flat `direction` field for links not yet migrated.
  *
  * @param {object} link
- * @returns {string} "both" | "forward" | "backward" | "blocked"
+ * @returns {string} one of the flat direction strings — see decomposeDirection
  */
 export function getEffectiveDirection(link) {
   return link.passages?.[0]?.direction ?? link.direction ?? "both";
@@ -144,69 +144,62 @@ export async function setNodeActiveLinkedScene(nodeId, linkedSceneId) {
 }
 
 /**
- * A link/passage's traversal mode is stored as one flat string (both/forward/backward/
- * blocked/locked/forward-blocked/backward-blocked/forward-locked/backward-locked), but the
- * GM edits it as two independent axes:
+ * A link/passage's traversal mode is stored as one flat string (e.g. "both", "forward",
+ * "forward-blocked", "custom"), decomposed into two independent axes for editing:
  *   - direction: "both" | "forward" | "backward" — which side(s) are the "normal" side.
- *   - state:     "open" | "blocked" | "locked"   — what happens on the side(s) that
- *                aren't plain "forward"/"backward" travel.
+ *   - state:     "open" | "blocked" | "secret" | "custom" — what happens on the side(s)
+ *                that aren't plain "forward"/"backward" travel.
  *
  * decomposeDirection/composeDirection convert between the flat string and the two axes;
  * cycleLinkDirectionAxis/cycleLinkStateAxis step one axis while holding the other fixed —
- * these are what the GM's two controls (direction click, state click) call.
+ * these are what the GM's two controls (direction click, state click) call. A flat string
+ * is "both" + a non-open state (e.g. "blocked") when the state applies to both sides, or
+ * "<direction>-<state>" (e.g. "forward-blocked") when it applies only to the closed side
+ * of a one-way link.
  *
- * State reference (composed forms):
- *   "both"             — Bidirectional, open. Players on either side see the link and can traverse it.
- *   "forward"          — One-way, open: source → target only. Target side does not see it.
- *   "backward"         — One-way, open: target → source only. Source side does not see it.
- *   "forward-blocked"  — Source → target is open and visible to everyone. Target → source is
- *                        completely hidden from players; the GM sees it as a secret passage.
- *   "backward-blocked" — Target → source is open and visible to everyone. Source → target is
- *                        completely hidden from players; the GM sees it as a secret passage.
- *   "forward-locked"   — Source → target is open and visible to everyone. Target → source is
- *                        visible (lock icon ⊘) but not navigable.
- *   "backward-locked"  — Target → source is open and visible to everyone. Source → target is
- *                        visible (lock icon ⊘) but not navigable.
- *   "blocked"          — Completely hidden on both sides. Does not appear in the HUD for
- *                        anyone. Useful for temporarily disabling a connection without
- *                        deleting it.
- *   "locked"           — Visible on both sides (lock icon ⊘) but not navigable from either.
- *                        Players can see the destination but clicking it does nothing.
- *                        Useful for hinting at a passage that hasn't been unlocked yet.
+ * State axis reference:
+ *   "open"   — Normal traversal, no restriction.
+ *   "blocked"— Visible to everyone (⊘ icon, red) but not traversable by players. The GM
+ *              can still cross it. Useful for hinting at a passage that isn't open yet.
+ *   "secret" — Hidden from players entirely; the GM sees it marked (mask icon, purple) as
+ *              a secret passage and can still cross it. Useful for temporarily disabling a
+ *              connection, or for a passage players shouldn't know exists yet.
+ *   "custom" — Visible to everyone like "blocked", but traversable only once the player
+ *              satisfies the passage's `keys` (see evaluatePassageKeys) — an item they must
+ *              own, a specific actor, a macro that returns true, or a scene they've
+ *              visited. The GM always bypasses the check.
  *
- * The four one-way block/lock combos let a passage be bolted, blocked or secret from one
- * side while remaining perfectly normal from the other — e.g. a door barred from the inside,
- * or a bookshelf that hides a passage on one side but is a plain doorway on the other.
+ * Combined with direction, a one-way state (e.g. "forward-blocked") lets a passage be
+ * bolted, secret or keyed from one side while remaining perfectly normal from the other —
+ * e.g. a door barred from the inside, or a bookshelf that hides a passage on one side but
+ * is a plain doorway on the other.
  */
 
 const DIRECTION_AXIS_CYCLE = Object.freeze({ both: "forward", forward: "backward", backward: "both" });
-const STATE_AXIS_CYCLE     = Object.freeze({ open: "blocked", blocked: "locked",   locked: "open"   });
+const STATE_AXIS_CYCLE     = Object.freeze({ open: "blocked", blocked: "secret", secret: "custom", custom: "open" });
 
 /**
  * Splits a flat direction string into its direction axis (both/forward/backward) and
- * state axis (open/blocked/locked).
+ * state axis (open/blocked/secret/custom).
  * @param {string} direction
- * @returns {{dirAxis: "both"|"forward"|"backward", stateAxis: "open"|"blocked"|"locked"}}
+ * @returns {{dirAxis: "both"|"forward"|"backward", stateAxis: "open"|"blocked"|"secret"|"custom"}}
  */
 export function decomposeDirection(direction) {
-  switch (direction) {
-    case "both":     return { dirAxis: "both",     stateAxis: "open" };
-    case "forward":  return { dirAxis: "forward",  stateAxis: "open" };
-    case "backward": return { dirAxis: "backward", stateAxis: "open" };
-    case "blocked":  return { dirAxis: "both",     stateAxis: "blocked" };
-    case "locked":   return { dirAxis: "both",     stateAxis: "locked" };
-    case "forward-blocked":  return { dirAxis: "forward",  stateAxis: "blocked" };
-    case "backward-blocked": return { dirAxis: "backward", stateAxis: "blocked" };
-    case "forward-locked":   return { dirAxis: "forward",  stateAxis: "locked" };
-    case "backward-locked":  return { dirAxis: "backward", stateAxis: "locked" };
-    default: return { dirAxis: "both", stateAxis: "open" };
+  if (direction === "both" || direction === "forward" || direction === "backward") {
+    return { dirAxis: direction, stateAxis: "open" };
   }
+  if (direction === "blocked" || direction === "secret" || direction === "custom") {
+    return { dirAxis: "both", stateAxis: direction };
+  }
+  const match = /^(forward|backward)-(blocked|secret|custom)$/.exec(direction ?? "");
+  if (match) return { dirAxis: match[1], stateAxis: match[2] };
+  return { dirAxis: "both", stateAxis: "open" };
 }
 
 /**
  * Recomposes a direction axis and state axis back into the flat stored string.
  * @param {"both"|"forward"|"backward"} dirAxis
- * @param {"open"|"blocked"|"locked"} stateAxis
+ * @param {"open"|"blocked"|"secret"|"custom"} stateAxis
  * @returns {string}
  */
 export function composeDirection(dirAxis, stateAxis) {
@@ -227,8 +220,8 @@ export function cycleLinkDirectionAxis(direction) {
 }
 
 /**
- * Cycles the state axis (open → blocked → locked → open) while preserving the current
- * direction axis. Called when the GM clicks the state control.
+ * Cycles the state axis (open → blocked → secret → custom → open) while preserving the
+ * current direction axis. Called when the GM clicks the state control.
  * @param {string} direction
  * @returns {string}
  */
@@ -239,46 +232,120 @@ export function cycleLinkStateAxis(direction) {
 
 /**
  * Resolves how a link may be traversed from one specific side, given its effective
- * direction. Single choke point for all 9 states — every consumer that gates or labels a
- * destination (the HUD, the "navigate back" check, the Visual Polls integration) goes
- * through this instead of re-deriving the combo logic itself.
+ * direction. Single choke point for every direction value — every consumer that gates or
+ * labels a destination (the HUD, the "navigate back" check, the Visual Polls integration)
+ * goes through this instead of re-deriving the combo logic itself.
  *
  * @param {string} direction - value from getEffectiveDirection(link)
  * @param {"source"|"target"} side - which side of the link this query is "from"
- * @returns {"open"|"locked"|"blocked"|"none"} "none" = no route from this side at all
- *   (the closed side of a plain one-way forward/backward link)
+ * @returns {"open"|"blocked"|"secret"|"custom"|"none"} "none" = no route from this side at
+ *   all (the closed side of a plain one-way forward/backward link)
  */
 export function getLinkStateFromSide(direction, side) {
-  switch (direction) {
-    case "both":     return "open";
-    case "blocked":  return "blocked";
-    case "locked":   return "locked";
-    case "forward":  return side === "source" ? "open" : "none";
-    case "backward": return side === "target" ? "open" : "none";
-    case "forward-blocked":  return side === "source" ? "open" : "blocked";
-    case "backward-blocked": return side === "target" ? "open" : "blocked";
-    case "forward-locked":   return side === "source" ? "open" : "locked";
-    case "backward-locked":  return side === "target" ? "open" : "locked";
-    default: return "none";
+  const { dirAxis, stateAxis } = decomposeDirection(direction);
+  if (dirAxis === "both") return stateAxis;
+  const isOpenSide = (dirAxis === "forward" && side === "source") || (dirAxis === "backward" && side === "target");
+  if (isOpenSide) return "open";
+  return stateAxis === "open" ? "none" : stateAxis;
+}
+
+/**
+ * Splits a one-way combo direction into its open side and the state of the closed side,
+ * for rendering (arrow direction + secondary indicator glyph). Returns null for a plain
+ * direction (both/forward/backward) or a both-sided state (blocked/secret/custom).
+ *
+ * @param {string} direction
+ * @returns {{openSide: "forward"|"backward", closedState: "blocked"|"secret"|"custom"}|null}
+ */
+export function splitOneWayState(direction) {
+  const { dirAxis, stateAxis } = decomposeDirection(direction);
+  if (dirAxis === "both" || stateAxis === "open") return null;
+  return { openSide: dirAxis, closedState: stateAxis };
+}
+
+/**
+ * Records a scene as visited by the given user — the data behind the "scene visited" key
+ * condition (see evaluatePassageKeys). Idempotent: a no-op when already recorded.
+ * @param {User} user
+ * @param {string|null} sceneId
+ * @returns {Promise<void>}
+ */
+export async function markSceneVisited(user, sceneId) {
+  if (!sceneId || !user) return;
+  const visited = user.getFlag(MODULE_ID, "visitedSceneIds") ?? [];
+  if (visited.includes(sceneId)) return;
+  await user.setFlag(MODULE_ID, "visitedSceneIds", [...visited, sceneId]);
+}
+
+/**
+ * Sets a user's current node position and records the node's active scene as visited by
+ * that user, in one call. Every place in the module that moves a user to a node (the HUD's
+ * own navigation, guide mode, GM-driven moves in the Manager) should go through this
+ * instead of setting the currentNodeId flag directly, so "scene visited" key conditions
+ * stay accurate no matter which path the user arrived by.
+ *
+ * @param {User} user
+ * @param {object} node - graph node the user is arriving at
+ * @returns {Promise<void>}
+ */
+export async function setUserCurrentNode(user, node) {
+  await user.setFlag(MODULE_ID, "currentNodeId", node.id);
+  await markSceneVisited(user, getNodeActiveSceneId(node));
+}
+
+/**
+ * Evaluates a single "key" condition attached to a custom-state passage, against the
+ * current user. Item/actor/scene checks are synchronous ownership/flag lookups; the macro
+ * check runs the macro and reads its return value (script macros return whatever their
+ * body returns).
+ *
+ * @param {{type: "item"|"actor"|"macro"|"scene", itemId?: string, itemName?: string,
+ *   actorId?: string, macroId?: string, sceneId?: string}} key
+ * @returns {Promise<boolean>}
+ */
+async function _evaluateKeyCondition(key) {
+  switch (key.type) {
+    case "item": {
+      const actor = game.user.character;
+      if (!actor) return false;
+      return actor.items.some(it => it.id === key.itemId || it.name === key.itemName);
+    }
+    case "actor":
+      return game.user.character?.id === key.actorId;
+    case "scene": {
+      const visited = game.user.getFlag(MODULE_ID, "visitedSceneIds") ?? [];
+      return visited.includes(key.sceneId);
+    }
+    case "macro": {
+      const macro = game.macros.get(key.macroId);
+      if (!macro) return false;
+      try {
+        return (await macro.execute()) === true;
+      } catch (err) {
+        console.error(`Click Adventure | Key macro "${macro.name}" failed:`, err);
+        return false;
+      }
+    }
+    default:
+      return false;
   }
 }
 
 /**
- * Splits a one-way block/lock combo direction into its open side and the state of the
- * closed side, for rendering (arrow direction + secondary indicator glyph). Returns null
- * for every other direction value (both/forward/backward/blocked/locked/peek).
+ * Evaluates a custom-state passage's full key list against the current user, combining
+ * results with the passage's keyMode ("AND" = every key required, "OR" = any one key).
+ * An empty key list always passes — picking "Custom" before configuring any keys behaves
+ * like "Open" rather than soft-locking the passage. The GM always bypasses the check.
  *
- * @param {string} direction
- * @returns {{openSide: "forward"|"backward", closedState: "blocked"|"locked"}|null}
+ * @param {{keys?: object[], keyMode?: "AND"|"OR"}} passage
+ * @returns {Promise<boolean>}
  */
-export function splitOneWayState(direction) {
-  switch (direction) {
-    case "forward-blocked":  return { openSide: "forward",  closedState: "blocked" };
-    case "backward-blocked": return { openSide: "backward", closedState: "blocked" };
-    case "forward-locked":   return { openSide: "forward",  closedState: "locked"  };
-    case "backward-locked":  return { openSide: "backward", closedState: "locked"  };
-    default: return null;
-  }
+export async function evaluatePassageKeys(passage) {
+  if (game.user.isGM) return true;
+  const keys = passage?.keys ?? [];
+  if (keys.length === 0) return true;
+  const results = await Promise.all(keys.map(_evaluateKeyCondition));
+  return (passage?.keyMode ?? "AND") === "OR" ? results.some(Boolean) : results.every(Boolean);
 }
 
 /**

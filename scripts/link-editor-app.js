@@ -13,6 +13,47 @@ import { getEffectiveDirection, getGraphData, saveGraphData, decomposeDirection,
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
+/**
+ * Resolves a dropped Item, Actor, Macro, or Scene into a "key" condition for a custom-state
+ * passage. Macros are imported from a compendium into the world first, same as elsewhere in
+ * the module, since macro.execute() requires a world document; Item/Actor/Scene are only
+ * ever referenced for lookup, never executed, so a compendium source is left as-is.
+ *
+ * @param {DragEvent} event
+ * @returns {Promise<object|null>} a key object ({type, ...idFields, label}), or null when
+ *   the drop wasn't a supported document type
+ */
+async function _resolveKeyFromDrop(event) {
+  let data;
+  try { data = JSON.parse(event.dataTransfer.getData("text/plain")); }
+  catch { return null; }
+
+  if (!data?.uuid) return null;
+  const doc = await fromUuid(data.uuid);
+  if (!doc) return null;
+
+  switch (data.type) {
+    case "Item":
+      return { type: "item", itemId: doc.id, itemName: doc.name, label: doc.name };
+    case "Actor":
+      return { type: "actor", actorId: doc.id, label: doc.name };
+    case "Scene":
+      return { type: "scene", sceneId: doc.id, label: doc.name };
+    case "Macro": {
+      let macro = doc;
+      if (macro.pack) {
+        const pack = game.packs.get(macro.pack);
+        if (!pack) return null;
+        const existing = game.macros.find(m => m.name === macro.name && !m.pack);
+        macro = existing ?? await game.macros.importFromCompendium(pack, macro.id);
+      }
+      return { type: "macro", macroId: macro.id, label: macro.name };
+    }
+    default:
+      return null;
+  }
+}
+
 export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
   /** @override */
   static BASE_APPLICATION = ApplicationV2;
@@ -87,7 +128,9 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
         index: i,
         displayModeIsPathOnly: (p.displayMode ?? "full") === "path-only",
         dirAxis,
-        stateAxis
+        stateAxis,
+        keyMode: p.keyMode ?? "AND",
+        keys: (p.keys ?? []).map((k, ki) => ({ ...k, keyIndex: ki }))
       };
     });
     // True when the link is already promoted to multi-passage (either by forceMulti or 2+ passages)
@@ -134,12 +177,54 @@ export class LinkEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     });
 
-    // State axis: open → blocked → locked → open (per row, independent)
+    // State axis: open → blocked → secret → custom → open (per row, independent)
     html.querySelectorAll(".ca-passage-state").forEach(btn => {
       btn.addEventListener("click", () => {
         const i = parseInt(btn.closest("[data-index]").dataset.index, 10);
         const current = this._pendingPassages[i].direction ?? "both";
         this._pendingPassages[i] = { ...this._pendingPassages[i], direction: cycleLinkStateAxis(current) };
+        this.render({ force: true });
+      });
+    });
+
+    // Custom state: key drop zone, per-key removal, and the AND/OR combinator toggle
+    html.querySelectorAll(".ca-passage-key-dropzone").forEach(zone => {
+      zone.addEventListener("dragover", e => {
+        e.preventDefault();
+        zone.classList.add("ca-dropzone--over");
+      });
+      zone.addEventListener("dragleave", () => zone.classList.remove("ca-dropzone--over"));
+      zone.addEventListener("drop", async e => {
+        e.preventDefault();
+        zone.classList.remove("ca-dropzone--over");
+        const key = await _resolveKeyFromDrop(e);
+        if (!key) {
+          ui.notifications.warn("Click Adventure: Drop an Item, Actor, Macro, or Scene.");
+          return;
+        }
+        const i = parseInt(zone.dataset.index, 10);
+        const keys = [...(this._pendingPassages[i].keys ?? []), key];
+        this._pendingPassages[i] = { ...this._pendingPassages[i], keys };
+        this.render({ force: true });
+      });
+    });
+
+    html.querySelectorAll(".ca-passage-key-remove").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i  = parseInt(btn.dataset.index, 10);
+        const ki = parseInt(btn.dataset.keyIndex, 10);
+        const keys = [...(this._pendingPassages[i].keys ?? [])];
+        keys.splice(ki, 1);
+        this._pendingPassages[i] = { ...this._pendingPassages[i], keys };
+        this.render({ force: true });
+      });
+    });
+
+    html.querySelectorAll(".ca-passage-key-mode").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.index, 10);
+        const current = this._pendingPassages[i].keyMode ?? "AND";
+        this._pendingPassages[i] = { ...this._pendingPassages[i], keyMode: current === "AND" ? "OR" : "AND" };
         this.render({ force: true });
       });
     });

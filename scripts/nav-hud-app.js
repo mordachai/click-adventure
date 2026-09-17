@@ -9,7 +9,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { isMultiPassage, getEffectiveDirection, getLinkStateFromSide, getGraphData, fireActiveItemMacro, fireNodeMacros, setNodeActiveImageIndex, setNodeActiveLinkedScene, getNodeActiveSceneId } from "./node-utils.js";
+import { isMultiPassage, getEffectiveDirection, getLinkStateFromSide, getGraphData, fireActiveItemMacro, fireNodeMacros, setNodeActiveImageIndex, setNodeActiveLinkedScene, getNodeActiveSceneId, setUserCurrentNode, evaluatePassageKeys } from "./node-utils.js";
 import { shouldLockOnArrival, isUserLocked } from "./autolock-utils.js";
 import { openNodeJournal } from "./node-media.js";
 
@@ -138,8 +138,9 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
         } else if (link.targetId === node.id && link.sourceId === targetNodeId) {
           if (getLinkStateFromSide(dir, "target") === "open") return true;
         }
-        // "blocked"/"locked" (including the closed side of a one-way combo): the link is
-        // hidden or visible-but-not-navigable from this side — NOT a valid back route
+        // "blocked"/"secret"/"custom" (including the closed side of a one-way combo): the
+        // link is hidden, visible-but-not-navigable, or conditional from this side — NOT a
+        // valid back route
       }
     }
     return false;
@@ -175,10 +176,10 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
             const side = link.sourceId === node.id ? "source" : (link.targetId === node.id ? "target" : null);
             if (!side) continue;
             const state = getLinkStateFromSide(passDir, side);
-            // Non-GMs never see blocked passages (or the blocked side of a one-way combo);
-            // GMs see them as "secret". "none" = closed side of a plain one-way passage.
+            // Non-GMs never see the secret side of a passage; GMs see it marked as secret.
+            // "none" = closed side of a plain one-way passage.
             if (state === "none") continue;
-            if (state === "blocked" && !game.user.isGM) continue;
+            if (state === "secret" && !game.user.isGM) continue;
 
             const otherId = side === "source" ? link.targetId : link.sourceId;
             const other = nodes.find(n => n.id === otherId);
@@ -191,8 +192,11 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
             const sublabel = isPathOnly ? null : (passage.label || null);
             availableDestinations.push({
               id: other.id, label, sublabel,
-              locked: state === "locked",
-              secret: state === "blocked"
+              blocked: state === "blocked",
+              secret:  state === "secret",
+              custom:  state === "custom",
+              keys:    passage.keys ?? [],
+              keyMode: passage.keyMode ?? "AND"
             });
           }
         } else {
@@ -201,21 +205,25 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           const side = link.sourceId === node.id ? "source" : (link.targetId === node.id ? "target" : null);
           if (!side) continue;
           const state = getLinkStateFromSide(dir, side);
-          // Non-GMs never see blocked links (or the blocked side of a one-way combo);
-          // GMs see them as "secret". "none" = closed side of a plain one-way link.
+          // Non-GMs never see the secret side of a link; GMs see it marked as secret.
+          // "none" = closed side of a plain one-way link.
           if (state === "none") continue;
-          if (state === "blocked" && !game.user.isGM) continue;
+          if (state === "secret" && !game.user.isGM) continue;
 
           const otherId = side === "source" ? link.targetId : link.sourceId;
           const other = nodes.find(n => n.id === otherId);
           if (other && !seen.has(other.id)) {
             seen.add(other.id);
             const navName = other.label || game.scenes.get(other.sceneId)?.name || other.id;
+            const passage0 = link.passages?.[0];
             availableDestinations.push({
               id:     other.id,
               label:  navName,
-              locked: state === "locked",
-              secret: state === "blocked"
+              blocked: state === "blocked",
+              secret:  state === "secret",
+              custom:  state === "custom",
+              keys:    passage0?.keys ?? [],
+              keyMode: passage0?.keyMode ?? "AND"
             });
           }
         }
@@ -277,7 +285,7 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const playerIsLocked = !game.user.isGM && isUserLocked(game.userId);
     context.playerIsLocked = playerIsLocked;
     for (const dest of availableDestinations) {
-      dest.autolocked = playerIsLocked || dest.locked;
+      dest.autolocked = playerIsLocked || dest.blocked;
     }
     // ─────────────────────────────────────────────────────────────────────
 
@@ -297,6 +305,11 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
       dest.isVideo    = destSrc ? /\.(webm|mp4|ogg|ogv|mov)$/i.test(destSrc) : false;
     }
     // ─────────────────────────────────────────────────────────────────────
+
+    // Index is needed by the click handler to look up a custom-state destination's keys
+    // (which don't survive a round trip through DOM data attributes) via this._lastDestinations.
+    availableDestinations.forEach((dest, i) => { dest.index = i; });
+    this._lastDestinations = availableDestinations;
 
     context.availableDestinations = availableDestinations;
     context.hasAnyDirection = availableDestinations.length > 0;
@@ -467,15 +480,23 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const html = this.element;
 
     html.querySelectorAll(".ca-hud-dest-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
+      btn.addEventListener("click", async (e) => {
         if (e.target.closest(".ca-hud-preview-eye")) return;
-        if (!game.user.isGM && btn.dataset.locked === "true") {
+        if (!game.user.isGM && btn.dataset.blocked === "true") {
           ui.notifications.warn("This path is not accessible.");
           return;
         }
         if (!game.user.isGM && btn.dataset.autolocked === "true") {
           ui.notifications.warn("This path is locked. Wait for the GM to release you.");
           return;
+        }
+        if (btn.dataset.custom === "true") {
+          const idx = parseInt(btn.dataset.destIndex, 10);
+          const dest = this._lastDestinations?.[idx];
+          if (!(await evaluatePassageKeys(dest))) {
+            ui.notifications.warn("Click Adventure: You don't have what's needed to pass.");
+            return;
+          }
         }
         const nodeId = btn.dataset.nodeId;
         const { nodes } = getGraphData();
@@ -876,7 +897,7 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     // Per-user position — does not affect other players' currentNodeId flags
-    await game.user.setFlag("click-adventure", "currentNodeId", targetNode.id);
+    await setUserCurrentNode(game.user, targetNode);
 
     // ── Request autolock if the destination node requires it ──────────────
     // Non-GM only: ask the GM (server) to register the lock since only GM
@@ -940,7 +961,7 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           const fromSceneId = getNodeActiveSceneId(fromNode);
 
           await user.unsetFlag("click-adventure", "previousNodeId");
-          await user.setFlag("click-adventure", "currentNodeId", targetNode.id);
+          await setUserCurrentNode(user, targetNode);
 
           // GM is the executor — call directly (socket.io does not echo to emitter).
           await globalThis.ClickAdventure._socket._handleMoveToken({
@@ -961,7 +982,7 @@ export class NavHudApp extends HandlebarsApplicationMixin(ApplicationV2) {
           const fromSceneId = getNodeActiveSceneId(fromNode);
 
           await user.unsetFlag("click-adventure", "previousNodeId");
-          await user.setFlag("click-adventure", "currentNodeId", targetNode.id);
+          await setUserCurrentNode(user, targetNode);
 
           if (activeSceneId) {
             globalThis.ClickAdventure._socket.teleportUser(activeSceneId, user.id, targetNode.id);

@@ -91,6 +91,7 @@
    `strong { color: … }` rule above, which is otherwise more specific. */
 .click-adventure.instructions .ca-instr-panel .ca-swatch--open        { color: var(--ca-state-open); }
 .click-adventure.instructions .ca-instr-panel .ca-swatch--directional { color: var(--ca-state-directional); }
-.click-adventure.instructions .ca-instr-panel .ca-swatch--blocked     { color: var(--ca-state-blocked); }
-.click-adventure.instructions .ca-instr-panel .ca-swatch--locked      { color: var(--ca-state-locked); }
+.click-adventure.instructions .ca-instr-panel .ca-swatch--blocked     { color: var(--ca-state-locked); }
+.click-adventure.instructions .ca-instr-panel .ca-swatch--secret      { color: var(--ca-state-blocked); }
+.click-adventure.instructions .ca-instr-panel .ca-swatch--custom      { color: var(--ca-state-custom); }
 .click-adventure.instructions .ca-instr-panel .ca-swatch--peek        { color: var(--ca-state-peek); }

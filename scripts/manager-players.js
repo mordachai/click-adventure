@@ -6,7 +6,7 @@
  * access `app.element`, `app._navRequests`, and trigger renders.
  */
 
-import { getGraphData } from "./node-utils.js";
+import { getGraphData, setUserCurrentNode } from "./node-utils.js";
 import { isUserLocked, lockUser, unlockUser, shouldLockOnArrival } from "./autolock-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -262,6 +262,9 @@ export async function approveRequest(app, userId, toNodeId) {
 
   app._navRequests.delete(userId);
 
+  const { nodes } = getGraphData();
+  const targetNode = nodes.find(n => n.id === toNodeId);
+
   const user = game.users.get(userId);
   if (user) {
     // Preserve the "came from" context on approval
@@ -270,11 +273,8 @@ export async function approveRequest(app, userId, toNodeId) {
     } else {
       await user.unsetFlag("click-adventure", "previousNodeId");
     }
-    await user.setFlag("click-adventure", "currentNodeId", toNodeId);
+    if (targetNode) await setUserCurrentNode(user, targetNode);
   }
-
-  const { nodes } = getGraphData();
-  const targetNode = nodes.find(n => n.id === toNodeId);
 
   globalThis.ClickAdventure._socket.approveNavRequest(userId, toNodeId, targetNode?.sceneId ?? null);
   patchOccupantAvatars(app);
@@ -394,7 +394,9 @@ export function patchRequestsDrawer(app) {
  */
 export async function onSetActiveNode(app, nodeId) {
   if (!nodeId) return;
-  await game.user.setFlag("click-adventure", "currentNodeId", nodeId);
+  const { nodes } = getGraphData();
+  const node = nodes.find(n => n.id === nodeId);
+  if (node) await setUserCurrentNode(game.user, node);
   app.render({ force: true });
   globalThis.ClickAdventure._hud?.render({ force: true });
 }
@@ -504,7 +506,7 @@ export async function onSendAllToNode(app, targetNode, players) {
 
     // Teleport clears the "came from" context
     await user.unsetFlag("click-adventure", "previousNodeId");
-    await user.setFlag("click-adventure", "currentNodeId", targetNode.id);
+    await setUserCurrentNode(user, targetNode);
 
     // Apply autolock if the destination node requires it (Risk: teleport bypasses player-side check)
     if (shouldLockOnArrival(targetNode)) {
@@ -583,7 +585,7 @@ export async function onTeleportPlayer(app, user, nodeId) {
 
   // Teleport clears the "came from" context
   await user.unsetFlag("click-adventure", "previousNodeId");
-  await user.setFlag("click-adventure", "currentNodeId", nodeId);
+  await setUserCurrentNode(user, targetNode);
 
   // Apply autolock if the destination node requires it (Risk: teleport bypasses player-side check)
   if (shouldLockOnArrival(targetNode)) {

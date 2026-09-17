@@ -191,17 +191,9 @@ export class ManagerApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (isMultiPassage(link)) {
         for (const passage of link.passages) {
           const dir = passage.direction ?? "both";
-          if (dir === "blocked" || dir === "locked") continue;
-          let otherId = null;
-          if (dir === "both") {
-            if (link.sourceId === gmNodeId)      otherId = link.targetId;
-            else if (link.targetId === gmNodeId) otherId = link.sourceId;
-          } else if (dir === "forward" && link.sourceId === gmNodeId) {
-            otherId = link.targetId;
-          } else if (dir === "backward" && link.targetId === gmNodeId) {
-            otherId = link.sourceId;
-          }
-          if (!otherId) continue;
+          const side = link.sourceId === gmNodeId ? "source" : (link.targetId === gmNodeId ? "target" : null);
+          if (!side || getLinkStateFromSide(dir, side) !== "open") continue;
+          const otherId = side === "source" ? link.targetId : link.sourceId;
           const other = nodes.find(n => n.id === otherId);
           if (!other) continue;
           const navName = other.label || game.scenes.get(other.sceneId)?.name || other.id;
